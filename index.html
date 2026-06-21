@@ -307,6 +307,12 @@
   .av-pick img { width: 100%; border-radius: 50%; display: block; }
   .av-pick:hover { transform: scale(1.14); }
   .av-pick.sel { border-color: var(--brand); }
+
+  /* PDF upload */
+  .attach-btn { display: inline-flex; align-items: center; justify-content: center; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); cursor: pointer; font-size: .9rem; flex-shrink: 0; transition: background .14s, border-color .14s; }
+  .attach-btn:hover { background: var(--brand-soft); border-color: var(--brand-soft); }
+  .pdf-chip { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; font-size: .74rem; font-weight: 600; color: var(--brand-ink); background: var(--brand-soft); padding: 3px 9px; border-radius: 99px; text-decoration: none; }
+  .pdf-chip:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -1054,14 +1060,42 @@ function removeSharedReading(id) {
   sb.from('shared_readings').delete().eq('id', id).then(() => loadSocial().then(renderMain));
 }
 function toggleComments(rId) { openComments[rId] = !openComments[rId]; renderMain(); }
+
+// ---- PDF uploads (Supabase Storage) ----
+let cmtAttach = {};   // reading_id -> {url,name} pending comment attachment
+async function uploadPDF(file) {
+  if (!sb || !currentUser) { showAuth(); return null; }
+  if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) { alert('Please choose a PDF file.'); return null; }
+  if (file.size > 15 * 1024 * 1024) { alert('That PDF is over 15 MB — please use a smaller file or a link.'); return null; }
+  const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-50);
+  const path = currentUser.id + '/' + Date.now() + '_' + safe;
+  setSync('Uploading…');
+  try {
+    const { error } = await sb.storage.from('uploads').upload(path, file, { contentType: 'application/pdf' });
+    if (error) throw error;
+    const { data } = sb.storage.from('uploads').getPublicUrl(path);
+    setSync('✓ Uploaded', 'ok'); setTimeout(() => setSync(''), 1500);
+    return { url: data.publicUrl, name: file.name };
+  } catch (e) { console.warn('upload failed', e); setSync('⚠ Upload failed', 'err'); alert('Upload failed: ' + (e.message || e)); return null; }
+}
+async function attachCommentPDF(rId, inputEl) {
+  const file = inputEl.files[0]; inputEl.value = ''; if (!file) return;
+  const up = await uploadPDF(file); if (!up) return;
+  cmtAttach[rId] = up;
+  const el = document.getElementById('cmtAtt_' + rId);
+  if (el) el.innerHTML = `<span style="font-size:.74rem;color:var(--muted)">📎 ${esc(up.name)} <a onclick="delete cmtAttach['${rId}'];document.getElementById('cmtAtt_${rId}').innerHTML=''" style="cursor:pointer;color:var(--brand-ink)">remove</a></span>`;
+}
+
 async function addComment(rId) {
   const input = document.getElementById('cmt_' + rId);
   const body = input && input.value.trim();
-  if (!body) return;
+  const att = cmtAttach[rId];
+  if (!body && !att) return;
   if (!currentUser) { showAuth(); return; }
-  input.value = '';
+  if (input) input.value = '';
+  delete cmtAttach[rId];
   try {
-    await sb.from('comments').insert({ reading_id: rId, user_id: currentUser.id, body });
+    await sb.from('comments').insert({ reading_id: rId, user_id: currentUser.id, body: body || '', attachment: att ? att.url : null });
     await loadSocial();
   } catch (e) { console.warn('comment failed', e); }
   openComments[rId] = true; renderMain();
@@ -1293,7 +1327,8 @@ function renderSuggested(lu) {
     : '<div style="font-size:.8rem;color:var(--faint);padding:2px 0 4px">No suggestions yet.</div>';
   const adder = currentUser
     ? `<div class="add-row">
-        <input id="newSug_${lu.id}" placeholder="Suggest a reading for the group…" onkeydown="if(event.key==='Enter')addSuggested('${lu.id}')">
+        <input id="newSug_${lu.id}" placeholder="Suggest a reading (title or link)…" onkeydown="if(event.key==='Enter')addSuggested('${lu.id}')">
+        <label class="attach-btn" title="Attach a PDF">📎<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="attachSuggestedPDF('${lu.id}', this)"></label>
         <button onclick="addSuggested('${lu.id}')">Suggest</button>
       </div>`
     : `<div style="font-size:.76rem;color:var(--faint);margin-top:8px"><a onclick="showAuth()" style="cursor:pointer;color:var(--brand-ink)">Sign in</a> to suggest a reading.</div>`;
@@ -1345,14 +1380,16 @@ function renderThread(rId, cmts) {
     ${avatarHTML(c.user_id, 24)}
     <div style="flex:1;min-width:0">
       <div style="font-size:.72rem;color:var(--faint)"><b style="color:var(--text)">${esc(nameOf(c.user_id))}</b> · ${timeAgo(c.created_at)}${c.user_id === mine ? ` · <a onclick="deleteComment('${c.id}','${rId}')" style="color:var(--brand-ink);cursor:pointer">delete</a>` : ''}</div>
-      <div style="font-size:.84rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;color:var(--text)">${esc(c.body)}</div>
+      ${c.body ? `<div style="font-size:.84rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;color:var(--text)">${esc(c.body)}</div>` : ''}
+      ${c.attachment ? `<a href="${esc(c.attachment)}" target="_blank" rel="noopener" class="pdf-chip">📎 PDF</a>` : ''}
     </div>
   </div>`).join('') || '<div style="font-size:.78rem;color:var(--faint);padding:4px 0">No comments yet — start the discussion.</div>';
   const box = currentUser
     ? `<div style="display:flex;gap:6px;margin-top:8px">
         <input id="cmt_${rId}" placeholder="Add a comment…" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:.82rem;outline:none;background:var(--surface);color:var(--text);font-family:inherit" onkeydown="if(event.key==='Enter')addComment('${rId}')">
+        <label class="attach-btn" title="Attach a PDF">📎<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="attachCommentPDF('${rId}', this)"></label>
         <button onclick="addComment('${rId}')" style="padding:7px 13px;background:var(--brand);color:var(--on-brand);border:none;border-radius:8px;font-size:.8rem;cursor:pointer;font-weight:600;font-family:inherit">Post</button>
-      </div>`
+      </div><div id="cmtAtt_${rId}" style="margin-top:5px"></div>`
     : `<div style="font-size:.76rem;color:var(--faint);margin-top:4px"><a onclick="showAuth()" style="color:var(--brand-ink);cursor:pointer">Sign in</a> to join the discussion.</div>`;
   return `<div class="thread">${list}${box}</div>`;
 }
@@ -1397,6 +1434,20 @@ async function addSuggested(luId) {
     await sb.from('shared_readings').insert({ lu_id: luId, reading_type: 'suggested', name: text, url: '', descr: '', added_by: currentUser.id });
     await loadSocial();
   } catch (e) { console.warn('suggest reading failed', e); }
+  userData.openLUs[luId] = true; renderMain();
+}
+// Suggest a reading by uploading a PDF (name = typed text if any, else the file name).
+async function attachSuggestedPDF(luId, inputEl) {
+  const file = inputEl.files[0]; inputEl.value = ''; if (!file) return;
+  if (!currentUser) { showAuth(); return; }
+  const up = await uploadPDF(file); if (!up) return;
+  const nameInput = document.getElementById('newSug_' + luId);
+  const name = (nameInput && nameInput.value.trim()) || up.name.replace(/\.pdf$/i, '');
+  if (nameInput) nameInput.value = '';
+  try {
+    await sb.from('shared_readings').insert({ lu_id: luId, reading_type: 'suggested', name, url: up.url, descr: '', added_by: currentUser.id });
+    await loadSocial();
+  } catch (e) { console.warn('suggest pdf failed', e); }
   userData.openLUs[luId] = true; renderMain();
 }
 

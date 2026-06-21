@@ -131,6 +131,28 @@ create policy "comments insert own" on public.comments for insert with check (au
 drop policy if exists "comments delete own" on public.comments;
 create policy "comments delete own" on public.comments for delete using (auth.uid() = user_id);
 
+-- ── File uploads (PDFs in comments & suggested readings) ─────────────────────
+-- A public storage bucket; signed-in users upload, everyone can read.
+insert into storage.buckets (id, name, public)
+  values ('uploads', 'uploads', true)
+  on conflict (id) do update set public = true;
+
+drop policy if exists "uploads read" on storage.objects;
+create policy "uploads read" on storage.objects
+  for select using (bucket_id = 'uploads');
+drop policy if exists "uploads insert" on storage.objects;
+create policy "uploads insert" on storage.objects
+  for insert to authenticated with check (bucket_id = 'uploads');
+drop policy if exists "uploads update own" on storage.objects;
+create policy "uploads update own" on storage.objects
+  for update to authenticated using (bucket_id = 'uploads' and owner = auth.uid());
+drop policy if exists "uploads delete own" on storage.objects;
+create policy "uploads delete own" on storage.objects
+  for delete to authenticated using (bucket_id = 'uploads' and owner = auth.uid());
+
+-- attachment (PDF url) on comments
+alter table public.comments add column if not exists attachment text;
+
 -- ── Realtime (live sync across devices) ──────────────────────────────────────
 do $$ begin
   alter publication supabase_realtime add table public.catalog;
