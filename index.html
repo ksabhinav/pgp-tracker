@@ -317,6 +317,7 @@
   /* activity day separators */
   .day-break { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--faint); margin: 22px 0 4px; padding-bottom: 5px; border-bottom: 1px solid var(--hair); }
   .day-break:first-child { margin-top: 0; }
+  .test-tag { display: inline-block; font-size: .58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gold); background: var(--gold-soft); padding: 1px 6px; border-radius: 99px; margin-left: 5px; vertical-align: middle; }
 </style>
 </head>
 <body>
@@ -963,17 +964,18 @@ async function loadSocial() {
     ]);
     profiles = {}; (pf.data || []).forEach(p => profiles[p.user_id] = p);
     const hidden = new Set(Object.keys(profiles).filter(u => profiles[u].hidden));   // dummy/test accounts
+    const hideFrom = !isAdmin;                      // admin sees test accounts (tagged); everyone else doesn't
     completers = {}; const mine = {}; const acts = [];
     (cm.data || []).forEach(c => {
       if (c.user_id === currentUser.id) mine[c.reading_id] = true;   // my own progress (even if I'm hidden)
-      if (hidden.has(c.user_id)) return;                              // hide from public displays
+      if (hideFrom && hidden.has(c.user_id)) return;                 // hide from non-admins
       (completers[c.reading_id] = completers[c.reading_id] || []).push(c.user_id);
       acts.push({ kind: 'done', user_id: c.user_id, reading_id: c.reading_id, at: c.created_at });
     });
     userData.checked = mine;                       // my completions drive my progress
-    sharedReadings = {}; (sr.data || []).forEach(r => { if (hidden.has(r.added_by)) return; (sharedReadings[r.lu_id] = sharedReadings[r.lu_id] || []).push(r); });
+    sharedReadings = {}; (sr.data || []).forEach(r => { if (hideFrom && hidden.has(r.added_by)) return; (sharedReadings[r.lu_id] = sharedReadings[r.lu_id] || []).push(r); });
     comments = {}; (co.data || []).forEach(c => {
-      if (hidden.has(c.user_id)) return;
+      if (hideFrom && hidden.has(c.user_id)) return;
       (comments[c.reading_id] = comments[c.reading_id] || []).push(c);
       acts.push({ kind: 'comment', user_id: c.user_id, reading_id: c.reading_id, body: c.body, at: c.created_at });
     });
@@ -1035,6 +1037,7 @@ function avatarHTML(uid, size) {
   return `<span class="av" data-name="${esc(name)}" aria-label="${esc(name)}" style="width:${s}px;height:${s}px;background:${color};font-size:${Math.round(s * 0.4)}px">${esc(initials(name))}</span>`;
 }
 function nameOf(uid) { return (profiles[uid] && profiles[uid].name) || 'Member'; }
+function testTag(uid) { return (profiles[uid] && profiles[uid].hidden) ? ' <span class="test-tag">test account</span>' : ''; }
 
 // ---- profile setup ----
 function needsProfile() { return currentUser && !myProfile; }
@@ -1258,7 +1261,7 @@ function renderActivity(panel) {
     const ri = readingIndex[a.reading_id]; if (!ri) return;
     const dl = dayLabel(a.at);
     if (dl !== lastDay) { lastDay = dl; parts.push(`<div class="day-break">${dl}</div>`); }
-    const who = `<b>${esc(nameOf(a.user_id))}</b>`;
+    const who = `<b>${esc(nameOf(a.user_id))}</b>${testTag(a.user_id)}`;
     const where = `<a class="meta-link" onclick="goToReading('${a.reading_id}')">${esc(ri.name)}</a>`;
     const body = a.kind === 'done'
       ? `${who} completed ${where}`
@@ -1276,13 +1279,13 @@ function renderPeople(panel) {
   }
   const counts = {};
   Object.values(completers).forEach(list => list.forEach(u => counts[u] = (counts[u] || 0) + 1));
-  // include everyone with a (non-hidden) profile, even 0 completions
-  Object.keys(profiles).forEach(u => { if (profiles[u].hidden) return; if (!(u in counts)) counts[u] = 0; });
+  // include everyone with a profile (admins also see hidden test accounts)
+  Object.keys(profiles).forEach(u => { if (!isAdmin && profiles[u].hidden) return; if (!(u in counts)) counts[u] = 0; });
   const people = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
   const cards = people.map(u => `<div class="person-card">
       ${avatarHTML(u, 42)}
       <div style="min-width:0">
-        <div style="font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(nameOf(u))}${u === currentUser.id ? ' <span style="color:var(--faint);font-weight:500">(you)</span>' : ''}</div>
+        <div style="font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(nameOf(u))}${u === currentUser.id ? ' <span style="color:var(--faint);font-weight:500">(you)</span>' : ''}${testTag(u)}</div>
         <div style="font-size:.78rem;color:var(--muted)">${counts[u]} reading${counts[u] === 1 ? '' : 's'} completed</div>
       </div>
     </div>`).join('');
@@ -1380,7 +1383,7 @@ function readingItem(r, luUrl) {
   // attribution for member-added readings
   const mine = currentUser && currentUser.id;
   const addedHTML = r.added_by
-    ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:var(--faint)">added by ${avatarHTML(r.added_by, 17)} ${esc(nameOf(r.added_by))}${r.added_by === mine ? ` · <a onclick="removeSharedReading('${r.id}')" style="color:var(--brand-ink);cursor:pointer">remove</a>` : ''}</span>` : '';
+    ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:var(--faint)">added by ${avatarHTML(r.added_by, 17)} ${esc(nameOf(r.added_by))}${testTag(r.added_by)}${r.added_by === mine ? ` · <a onclick="removeSharedReading('${r.id}')" style="color:var(--brand-ink);cursor:pointer">remove</a>` : ''}</span>` : '';
   // comments
   const cmts = comments[r.id] || [];
   const hasC = cmts.length > 0;
@@ -1406,7 +1409,7 @@ function renderThread(rId, cmts) {
   const list = cmts.map(c => `<div style="display:flex;gap:8px;padding:6px 0">
     ${avatarHTML(c.user_id, 24)}
     <div style="flex:1;min-width:0">
-      <div style="font-size:.72rem;color:var(--faint)"><b style="color:var(--text)">${esc(nameOf(c.user_id))}</b> · ${timeAgo(c.created_at)}${c.user_id === mine ? ` · <a onclick="deleteComment('${c.id}','${rId}')" style="color:var(--brand-ink);cursor:pointer">delete</a>` : ''}</div>
+      <div style="font-size:.72rem;color:var(--faint)"><b style="color:var(--text)">${esc(nameOf(c.user_id))}</b>${testTag(c.user_id)} · ${timeAgo(c.created_at)}${c.user_id === mine ? ` · <a onclick="deleteComment('${c.id}','${rId}')" style="color:var(--brand-ink);cursor:pointer">delete</a>` : ''}</div>
       ${c.body ? `<div style="font-size:.84rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;color:var(--text)">${esc(c.body)}</div>` : ''}
       ${c.attachment ? `<a href="${esc(c.attachment)}" target="_blank" rel="noopener" class="pdf-chip">📎 PDF</a>` : ''}
     </div>
