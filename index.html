@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>PGP10 Reading Tracker</title>
-<meta name="description" content="Track your PGP10 mandatory and recommended readings across subjects.">
+<title>PGP Reading Tracker</title>
+<meta name="description" content="Track your PGP mandatory and recommended readings across subjects.">
 <!-- PWA -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#620D3C">
@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="PGP10">
+<meta name="apple-mobile-web-app-title" content="PGP">
 <!-- Supabase client + runtime config (config.js holds your project URL + anon key) -->
 <script src="vendor/supabase.min.js"></script>
 <script src="config.js"></script>
@@ -283,7 +283,7 @@
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
   /* ════ avatars + hover name, declutter discuss ════ */
-  .av-img { background: transparent !important; overflow: hidden; }
+  .av-img { background: transparent !important; }
   .av-img img { border-radius: 50%; }
   .av { position: relative; }
   .av[data-name]::after {
@@ -312,7 +312,7 @@
 <body>
 <header>
   <div style="min-width:0;flex:1">
-    <h1><img src="icons/favicon-32.png" class="brand-mark" alt="">PGP10 Reading Tracker</h1>
+    <h1><img src="icons/favicon-32.png" class="brand-mark" alt="">PGP Reading Tracker</h1>
     <div class="subtitle">Post Graduate Programme in Public Policy</div>
     <div id="acctArea" style="margin-top:7px;font-size:.74rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
   </div>
@@ -328,7 +328,7 @@
 <div id="authOverlay" style="display:none;position:fixed;inset:0;z-index:500;background:#620D3C;color:#fff;align-items:center;justify-content:center;padding:24px">
   <div style="background:#fff;color:#1a1a1a;border-radius:18px;padding:30px 26px;width:380px;max-width:94vw;box-shadow:0 24px 70px rgba(0,0,0,.35);text-align:center">
     <div style="font-size:2.4rem;margin-bottom:6px">📚</div>
-    <h2 style="font-size:1.15rem;color:#620D3C;margin-bottom:4px">PGP10 Reading Tracker</h2>
+    <h2 style="font-size:1.15rem;color:#620D3C;margin-bottom:4px">PGP Reading Tracker</h2>
     <p style="font-size:.82rem;color:#666;margin-bottom:18px">Sign in to sync your progress across devices.</p>
     <div id="authForm">
       <button onclick="signInGoogle()" id="googleBtn"
@@ -399,7 +399,7 @@
 <div class="modal-bg" id="outlineModal">
   <div class="modal import-modal" style="width:560px">
     <h3>📋 Import Course Outline</h3>
-    <p style="font-size:.82rem;color:#666;margin-bottom:10px">On the PGP10 course page (the <em>Learner's Guide</em> / content list), let it fully load, then <strong>select all</strong> (Cmd+A), <strong>copy</strong> (Cmd+C), and paste below. This builds every subject and its LU cards at once. Readings get filled later via the per-LU bookmarklet.</p>
+    <p style="font-size:.82rem;color:#666;margin-bottom:10px">On the PGP course page (the <em>Learner's Guide</em> / content list), let it fully load, then <strong>select all</strong> (Cmd+A), <strong>copy</strong> (Cmd+C), and paste below. This builds every subject and its LU cards at once. Readings get filled later via the per-LU bookmarklet.</p>
     <textarea id="outlinePaste" placeholder="Paste the copied course outline here…" oninput="previewOutline()"></textarea>
     <div class="import-preview" id="outlinePreview">
       <h4 id="outlineSummary"></h4>
@@ -1005,7 +1005,8 @@ function initials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 function hashColor(uid) { let h = 0; const k = String(uid); for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) | 0; return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]; }
-function isAvatarId(x) { return x && /^[mwn]\d\d$/.test(x); }
+function isAvatarId(x) { return x && /^a\d\d$/.test(x); }
+const AVATAR_IDS = Array.from({ length: 40 }, (_, i) => 'a' + String(i + 1).padStart(2, '0'));
 function avatarHTML(uid, size) {
   const p = profiles[uid] || {}; const s = size || 24;
   const name = p.name || 'Member';
@@ -1019,15 +1020,14 @@ function nameOf(uid) { return (profiles[uid] && profiles[uid].name) || 'Member';
 
 // ---- profile setup ----
 function needsProfile() { return currentUser && !myProfile; }
-let selAvatar = 'n01';
+let selAvatar = 'a01';
 function openProfile() {
   const cur = myProfile || {};
   document.getElementById('profName').value = cur.name || (currentUser ? currentUser.email.split('@')[0] : '');
-  selAvatar = isAvatarId(cur.emoji) ? cur.emoji : 'n01';
-  document.getElementById('avatarGrid').innerHTML = [['Men', 'm', 15], ['Women', 'w', 15], ['Gender-neutral', 'n', 10]].map(([label, pfx, n]) =>
-    `<div class="av-group-label">${label}</div><div class="av-row">` +
-    Array.from({ length: n }, (_, i) => { const id = pfx + String(i + 1).padStart(2, '0');
-      return `<button class="av-pick" data-id="${id}" onclick="selAvatar='${id}';renderProfPicker()"><img src="avatars/${id}.svg" alt="" loading="lazy"></button>`; }).join('') + `</div>`).join('');
+  selAvatar = isAvatarId(cur.emoji) ? cur.emoji : 'a01';
+  document.getElementById('avatarGrid').innerHTML = '<div class="av-row">' +
+    AVATAR_IDS.map(id => `<button class="av-pick" data-id="${id}" onclick="selAvatar='${id}';renderProfPicker()"><img src="avatars/${id}.svg" alt="" loading="lazy"></button>`).join('') +
+    '</div>';
   renderProfPicker();
   document.getElementById('profileModal').classList.add('open');
 }
@@ -1502,8 +1502,8 @@ function mergeReadings(lu, type, incoming, force) {
   (incoming || []).forEach(inc => {
     const match = lu[type].find(r => readingMatch(r.name, inc.name));
     if (match) {
-      if (inc.url && (force || !match.url)) match.url = inc.url;   // force overwrites (link corrections)
-      if (inc.desc && !match.desc) match.desc = inc.desc;
+      if (inc.url !== undefined && (force || !match.url)) match.url = inc.url;   // force overwrites; '' clears
+      if (inc.desc && (force || !match.desc)) match.desc = inc.desc;             // force corrects the description
     } else {
       lu[type].push({ id: uid(), name: inc.name, desc: inc.desc || '', url: inc.url || '' });
     }

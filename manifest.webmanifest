@@ -1,7 +1,7 @@
 {
-  "name": "PGP10 Reading Tracker",
-  "short_name": "PGP10",
-  "description": "Track your PGP10 mandatory and recommended readings across subjects.",
+  "name": "PGP Reading Tracker",
+  "short_name": "PGP",
+  "description": "Track your PGP mandatory and recommended readings across subjects.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
