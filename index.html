@@ -255,6 +255,23 @@
   </div>
 </div>
 
+<!-- Profile Modal -->
+<div class="modal-bg" id="profileModal">
+  <div class="modal" style="width:430px">
+    <h3>👋 Your profile</h3>
+    <p style="font-size:.8rem;color:#666;margin-bottom:12px">This is how you'll appear to others — on readings you complete, readings you add, and in discussions.</p>
+    <div id="profPreview" style="text-align:center;margin-bottom:14px"></div>
+    <input type="text" id="profName" placeholder="Display name" />
+    <div style="font-size:.7rem;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px">Pick an emoji</div>
+    <div id="emojiGrid" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    <div style="font-size:.7rem;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin:12px 0 6px">Pick a colour</div>
+    <div id="colorGrid" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div class="modal-actions" style="margin-top:18px">
+      <button class="btn btn-primary" onclick="saveProfile()">Save profile</button>
+    </div>
+  </div>
+</div>
+
 <!-- Add LU Modal -->
 <div class="modal-bg" id="addLUModal">
   <div class="modal">
@@ -476,17 +493,24 @@ function saveCatalog() {
   saveCatalogLocal();
   if (sb && isAdmin) { clearTimeout(catPushTimer); setSync('Saving…'); catPushTimer = setTimeout(pushCatalog, 600); }
 }
-function saveProgress() {
-  saveProgressLocal();
-  if (sb && currentUser) { clearTimeout(progPushTimer); setSync('Saving…'); progPushTimer = setTimeout(pushProgress, 600); }
-}
+function saveProgress() { saveProgressLocal(); }   // openLUs UI state; completions sync via toggleReading
 
 // ── SUPABASE + AUTH + SYNC ────────────────────────────────────────────────────
 let sb = null;            // supabase client
 let currentUser = null;   // signed-in user (null = anonymous, local-only)
 let isAdmin = false;      // currentUser.email === ADMIN_EMAIL
 let catPushTimer = null, progPushTimer = null;
-let catChannel = null, progChannel = null, inboxChannel = null;
+let catChannel = null, progChannel = null, inboxChannel = null, socialChannel = null;
+// social state (populated when signed in)
+let profiles = {};         // user_id -> { name, emoji, color }
+let completers = {};       // reading_id -> [user_id,...]
+let sharedReadings = {};   // lu_id -> [ {id,name,url,descr,reading_type,added_by} ]
+let comments = {};         // reading_id -> [ {id,user_id,body,created_at} ]
+let myProfile = null;
+let openComments = {};      // reading_id -> bool (which threads are expanded)
+let socialReloadTimer = null;
+const AVATAR_EMOJIS = ['🦊','🐼','🦉','🐯','🐸','🐙','🦁','🐨','🐧','🦄','🐢','🐝','🦋','🐬','🌸','🌟','🔥','🚀','📚','🧠','🎯','⚡','🍀','🎨'];
+const AVATAR_COLORS = ['#620D3C','#1d4ed8','#059669','#d97706','#7c3aed','#dc2626','#0891b2','#65a30d','#db2777','#0d9488','#9333ea','#ca8a04'];
 const CFG = window.PGP_CONFIG || {};
 const isConfigured = () => CFG.url && CFG.anonKey && !/YOUR_/.test(CFG.url) && !/YOUR_/.test(CFG.anonKey);
 
@@ -642,8 +666,11 @@ function renderAcct() {
   const el = document.getElementById('acctArea');
   if (!el) return;
   if (currentUser) {
-    el.innerHTML = `<span>👤 ${esc(currentUser.email)}</span>`
+    const av = myProfile ? avatarHTML(currentUser.id, 22) : '👤';
+    const nm = myProfile ? esc(myProfile.name) : esc(currentUser.email);
+    el.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px">${av} ${nm}</span>`
       + (isAdmin ? `<span style="background:#F1A222;color:#3a0a23;border-radius:6px;padding:1px 7px;font-weight:700;font-size:.66rem">ADMIN</span>` : '')
+      + `<button onclick="openProfile()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Edit profile</button>`
       + `<button onclick="signOut()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign out</button>`;
   } else if (isConfigured()) {
     el.innerHTML = `<span style="color:#F1A222">● Saved on this device</span>`
@@ -695,19 +722,21 @@ async function onSession(session) {
   if (currentUser) {
     hideAuth();
     await loadCatalog();
-    await loadProgress();
-    subscribeProgressRealtime();
+    await loadSocial();                           // profiles, my completions, shared readings, comments
+    subscribeSocialRealtime();
+    if (needsProfile()) openProfile();            // first login → pick an avatar
     if (isAdmin) {
       subscribeInboxRealtime();
       await drainInbox();                         // pull anything the userscript queued
       if (cleanupCatalog()) saveCatalog();        // collapse any fuzzy-duplicate readings
     }
-    renderAll();
+    renderAll(); renderAcct();
   } else {
-    if (progChannel) { try { sb.removeChannel(progChannel); } catch (e) {} progChannel = null; }
-    if (inboxChannel) { try { sb.removeChannel(inboxChannel); } catch (e) {} inboxChannel = null; }
+    [socialChannel, inboxChannel, progChannel].forEach(ch => { if (ch) { try { sb.removeChannel(ch); } catch (e) {} } });
+    socialChannel = inboxChannel = progChannel = null;
+    profiles = {}; completers = {}; sharedReadings = {}; comments = {}; myProfile = null;
     userData = loadLocalProgress();
-    renderAll();
+    renderAll(); renderAcct();
   }
 }
 
@@ -725,11 +754,115 @@ async function boot() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && sb) {
       loadCatalog()
-        .then(() => currentUser ? loadProgress() : null)
+        .then(() => currentUser ? loadSocial() : null)
         .then(() => isAdmin ? drainInbox() : null)
         .then(renderAll);
     }
   });
+}
+
+// ── SOCIAL (profiles, completions, shared readings, comments) ─────────────────
+async function loadSocial() {
+  if (!sb || !currentUser) return;
+  try {
+    const [pf, cm, sr, co] = await Promise.all([
+      sb.from('profiles').select('user_id,name,emoji,color'),
+      sb.from('completions').select('user_id,reading_id'),
+      sb.from('shared_readings').select('*'),
+      sb.from('comments').select('*').order('created_at')
+    ]);
+    profiles = {}; (pf.data || []).forEach(p => profiles[p.user_id] = p);
+    completers = {}; const mine = {};
+    (cm.data || []).forEach(c => {
+      (completers[c.reading_id] = completers[c.reading_id] || []).push(c.user_id);
+      if (c.user_id === currentUser.id) mine[c.reading_id] = true;
+    });
+    userData.checked = mine;                       // my completions drive my progress
+    sharedReadings = {}; (sr.data || []).forEach(r => (sharedReadings[r.lu_id] = sharedReadings[r.lu_id] || []).push(r));
+    comments = {}; (co.data || []).forEach(c => (comments[c.reading_id] = comments[c.reading_id] || []).push(c));
+    myProfile = profiles[currentUser.id] || null;
+  } catch (e) { console.warn('social load failed', e); }
+}
+
+function subscribeSocialRealtime() {
+  if (!sb || !currentUser || socialChannel) return;
+  const reload = () => { clearTimeout(socialReloadTimer); socialReloadTimer = setTimeout(() => loadSocial().then(renderAll), 350); };
+  socialChannel = sb.channel('social-rt')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'completions' }, reload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'shared_readings' }, reload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, reload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, reload)
+    .subscribe();
+}
+
+function avatarHTML(uid, size) {
+  const p = profiles[uid] || {}; const s = size || 22;
+  const emoji = p.emoji || '👤', color = p.color || '#888', name = p.name || 'Member';
+  return `<span title="${esc(name)}" style="display:inline-flex;align-items:center;justify-content:center;width:${s}px;height:${s}px;border-radius:50%;background:${color};font-size:${Math.round(s * 0.52)}px;line-height:1;flex-shrink:0;box-shadow:0 0 0 1.5px #fff">${emoji}</span>`;
+}
+function nameOf(uid) { return (profiles[uid] && profiles[uid].name) || 'Member'; }
+
+// ---- profile setup ----
+function needsProfile() { return currentUser && !myProfile; }
+function openProfile() {
+  const cur = myProfile || {};
+  document.getElementById('profName').value = cur.name || (currentUser ? currentUser.email.split('@')[0] : '');
+  selProfEmoji = cur.emoji || AVATAR_EMOJIS[0];
+  selProfColor = cur.color || AVATAR_COLORS[0];
+  document.getElementById('emojiGrid').innerHTML = AVATAR_EMOJIS.map(e =>
+    `<button onclick="selProfEmoji='${e}';renderProfPicker()" data-e="${e}" style="font-size:18px;width:34px;height:34px;border-radius:8px;border:2px solid transparent;background:#f5f2ef;cursor:pointer">${e}</button>`).join('');
+  document.getElementById('colorGrid').innerHTML = AVATAR_COLORS.map(c =>
+    `<button onclick="selProfColor='${c}';renderProfPicker()" data-c="${c}" style="width:28px;height:28px;border-radius:50%;border:2px solid transparent;background:${c};cursor:pointer"></button>`).join('');
+  renderProfPicker();
+  document.getElementById('profileModal').classList.add('open');
+}
+let selProfEmoji = '🦊', selProfColor = '#620D3C';
+function renderProfPicker() {
+  document.getElementById('profPreview').innerHTML =
+    `<span style="display:inline-flex;align-items:center;justify-content:center;width:54px;height:54px;border-radius:50%;background:${selProfColor};font-size:28px">${selProfEmoji}</span>`;
+  document.querySelectorAll('#emojiGrid button').forEach(b => b.style.borderColor = b.dataset.e === selProfEmoji ? '#620D3C' : 'transparent');
+  document.querySelectorAll('#colorGrid button').forEach(b => b.style.borderColor = b.dataset.c === selProfColor ? '#1a1a1a' : 'transparent');
+}
+async function saveProfile() {
+  const name = document.getElementById('profName').value.trim() || (currentUser.email.split('@')[0]);
+  try {
+    await sb.from('profiles').upsert({ user_id: currentUser.id, name, emoji: selProfEmoji, color: selProfColor, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    myProfile = { user_id: currentUser.id, name, emoji: selProfEmoji, color: selProfColor };
+    profiles[currentUser.id] = myProfile;
+  } catch (e) { console.warn('profile save failed', e); }
+  closeModal('profileModal');
+  renderAll(); renderAcct();
+}
+
+// ---- shared readings & comments ----
+function removeSharedReading(id) {
+  if (!sb || !currentUser) return;
+  if (!confirm('Remove this reading you added?')) return;
+  sb.from('shared_readings').delete().eq('id', id).then(() => loadSocial().then(renderMain));
+}
+function toggleComments(rId) { openComments[rId] = !openComments[rId]; renderMain(); }
+async function addComment(rId) {
+  const input = document.getElementById('cmt_' + rId);
+  const body = input && input.value.trim();
+  if (!body) return;
+  if (!currentUser) { showAuth(); return; }
+  input.value = '';
+  try {
+    await sb.from('comments').insert({ reading_id: rId, user_id: currentUser.id, body });
+    await loadSocial();
+  } catch (e) { console.warn('comment failed', e); }
+  openComments[rId] = true; renderMain();
+}
+function deleteComment(id, rId) {
+  if (!sb || !currentUser) return;
+  sb.from('comments').delete().eq('id', id).then(() => { openComments[rId] = true; loadSocial().then(renderMain); });
+}
+function timeAgo(iso) {
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
@@ -740,11 +873,12 @@ function findLU(luId) {
   for (const sub of catalog.subjects) { const lu = sub.lus.find(l => l.id === luId); if (lu) return lu; }
   return null;
 }
-// Shared readings for an LU plus this member's own personal extras of that type.
+// Catalog readings for an LU plus any member-contributed (shared) readings of that type.
 function luReadings(lu, type) {
   const base = lu[type] || [];
-  const extra = (userData.extras && userData.extras[lu.id]) ? userData.extras[lu.id].filter(r => r.type === type) : [];
-  return base.concat(extra);
+  const shared = (sharedReadings[lu.id] || []).filter(r => r.reading_type === type)
+    .map(r => ({ id: r.id, name: r.name, desc: r.descr || '', url: r.url || '', added_by: r.added_by }));
+  return base.concat(shared);
 }
 
 function getSubjectStats(sub) {
@@ -863,7 +997,7 @@ function renderLUCard(lu, color) {
         <div class="readings-label mandatory">📌 Mandatory Readings <span class="badge">${s.mandDone}/${s.mandTotal}</span></div>
         ${luReadings(lu, 'mandatory').map(r => readingItem(r)).join('')}
         <div style="margin-top:10px;display:flex;gap:8px">
-          <input type="text" id="newMand_${lu.id}" placeholder="${isAdmin ? 'Add mandatory reading (shared)…' : 'Add your own reading (private)…'}" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','mandatory')">
+          <input type="text" id="newMand_${lu.id}" placeholder="${isAdmin ? 'Add mandatory reading (official)…' : 'Suggest a reading to the group…'}" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','mandatory')">
           <button onclick="addReading('${lu.id}','mandatory')" style="padding:6px 12px;background:${color};color:white;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;font-weight:600">+ Add</button>
         </div>
       </div>
@@ -871,7 +1005,7 @@ function renderLUCard(lu, color) {
         <div class="readings-label recommended">⭐ Recommended Readings <span class="badge">${s.recDone}/${s.recTotal}</span></div>
         ${luReadings(lu, 'recommended').map(r => readingItem(r)).join('')}
         <div style="margin-top:10px;display:flex;gap:8px">
-          <input type="text" id="newRec_${lu.id}" placeholder="${isAdmin ? 'Add recommended reading (shared)…' : 'Add your own reading (private)…'}" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','recommended')">
+          <input type="text" id="newRec_${lu.id}" placeholder="${isAdmin ? 'Add recommended reading (official)…' : 'Suggest a reading to the group…'}" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','recommended')">
           <button onclick="addReading('${lu.id}','recommended')" style="padding:6px 12px;background:#b45309;color:white;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;font-weight:600">+ Add</button>
         </div>
       </div>
@@ -886,13 +1020,49 @@ function readingItem(r) {
   const nameHtml = r.url
     ? `<a href="${esc(r.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="reading-name" style="color:#1a4fd6;text-decoration:none;${strike}">${esc(r.name)} <span style="font-size:.72em">↗</span></a>`
     : `<span class="reading-name" onclick="document.getElementById('cb_${r.id}').click()" style="cursor:pointer;${strike}">${esc(r.name)}</span>`;
+  // who has completed this reading
+  const done = completers[r.id] || [];
+  const shownAv = done.slice(0, 6).map(u => avatarHTML(u, 20)).join('');
+  const moreAv = done.length > 6 ? `<span style="font-size:.7rem;color:#888;margin-left:2px">+${done.length - 6}</span>` : '';
+  const completersHTML = done.length
+    ? `<span style="display:inline-flex;align-items:center;gap:2px" title="Completed by: ${esc(done.map(nameOf).join(', '))}">${shownAv}${moreAv}</span>` : '';
+  // attribution for member-added readings
+  const mine = currentUser && currentUser.id;
+  const addedHTML = r.added_by
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:.7rem;color:#888">added by ${avatarHTML(r.added_by, 16)} ${esc(nameOf(r.added_by))}${r.added_by === mine ? ` · <a onclick="removeSharedReading('${r.id}')" style="color:#b06;cursor:pointer">remove</a>` : ''}</span>` : '';
+  // comments
+  const cmts = comments[r.id] || [];
+  const cmtToggle = `<a onclick="toggleComments('${r.id}')" style="font-size:.7rem;color:#620D3C;cursor:pointer;font-weight:600">💬 ${cmts.length ? cmts.length : 'Discuss'}</a>`;
+  const thread = openComments[r.id] ? renderThread(r.id, cmts) : '';
   return `<div class="reading-item${checked ? ' checked' : ''}" id="ri_${r.id}">
     <input type="checkbox" id="cb_${r.id}" ${checked ? 'checked' : ''} onchange="toggleReading('${r.id}')">
-    <div style="flex:1">
-      ${nameHtml}${r.personal ? ' <span class="lu-tag self" style="margin-left:4px">Personal</span>' : ''}
+    <div style="flex:1;min-width:0">
+      ${nameHtml}
       ${r.desc ? `<span class="reading-desc" style="${checked ? 'color:#bbb;' : ''}">${esc(r.desc)}</span>` : ''}
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:5px">
+        ${completersHTML}${cmtToggle}${addedHTML}
+      </div>
+      ${thread}
     </div>
   </div>`;
+}
+
+function renderThread(rId, cmts) {
+  const mine = currentUser && currentUser.id;
+  const list = cmts.map(c => `<div style="display:flex;gap:7px;padding:5px 0">
+    ${avatarHTML(c.user_id, 22)}
+    <div style="flex:1;min-width:0">
+      <div style="font-size:.72rem;color:#888"><b style="color:#444">${esc(nameOf(c.user_id))}</b> · ${timeAgo(c.created_at)}${c.user_id === mine ? ` · <a onclick="deleteComment('${c.id}','${rId}')" style="color:#b06;cursor:pointer">delete</a>` : ''}</div>
+      <div style="font-size:.82rem;line-height:1.4;white-space:pre-wrap;word-break:break-word">${esc(c.body)}</div>
+    </div>
+  </div>`).join('') || '<div style="font-size:.76rem;color:#aaa;padding:4px 0">No comments yet — start the discussion.</div>';
+  const box = currentUser
+    ? `<div style="display:flex;gap:6px;margin-top:6px">
+        <input id="cmt_${rId}" placeholder="Add a comment…" style="flex:1;padding:6px 9px;border:1px solid #ddd;border-radius:7px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addComment('${rId}')">
+        <button onclick="addComment('${rId}')" style="padding:6px 11px;background:#620D3C;color:#fff;border:none;border-radius:7px;font-size:.78rem;cursor:pointer;font-weight:600">Post</button>
+      </div>`
+    : `<div style="font-size:.74rem;color:#999;margin-top:4px"><a onclick="showAuth()" style="color:#620D3C;cursor:pointer">Sign in</a> to join the discussion.</div>`;
+  return `<div style="background:#faf7f4;border:1px solid #efe9e4;border-radius:8px;padding:8px 10px;margin-top:7px">${list}${box}</div>`;
 }
 
 // ── ACTIONS ───────────────────────────────────────────────────────────────────
@@ -905,29 +1075,44 @@ function toggleLU(luId) {
   saveProgress();
 }
 
-function toggleReading(rId) {
-  userData.checked[rId] = !userData.checked[rId];
-  saveProgress();
-  renderAll();   // re-render keeps open cards open (state in userData.openLUs)
+async function toggleReading(rId) {
+  const nowChecked = !userData.checked[rId];
+  userData.checked[rId] = nowChecked;
+  if (currentUser) {                              // keep the shared completer list in sync for instant UI
+    completers[rId] = completers[rId] || [];
+    if (nowChecked) { if (!completers[rId].includes(currentUser.id)) completers[rId].push(currentUser.id); }
+    else { completers[rId] = completers[rId].filter(u => u !== currentUser.id); }
+  }
+  renderAll();
+  if (currentUser && sb) {
+    try {
+      if (nowChecked) await sb.from('completions').upsert({ user_id: currentUser.id, reading_id: rId }, { onConflict: 'user_id,reading_id' });
+      else await sb.from('completions').delete().eq('user_id', currentUser.id).eq('reading_id', rId);
+    } catch (e) { console.warn('completion sync failed', e); }
+  } else {
+    saveProgressLocal();                          // anonymous: this device only
+  }
 }
 
-function addReading(luId, type) {
+async function addReading(luId, type) {
   const input = document.getElementById((type === 'mandatory' ? 'newMand_' : 'newRec_') + luId);
   const text = input && input.value.trim();
   if (!text) return;
   if (isAdmin) {
     const lu = findLU(luId);
     if (!lu) return;
-    lu[type].push({ id: uid(), name: text, desc: '', url: '' });   // shared list
+    lu[type].push({ id: uid(), name: text, desc: '', url: '' });   // official catalog list
     saveCatalog();
-  } else {
-    if (!userData.extras[luId]) userData.extras[luId] = [];
-    userData.extras[luId].push({ id: uid(), name: text, desc: '', url: '', type, personal: true });  // private to this member
-    saveProgress();
+    input.value = ''; userData.openLUs[luId] = true; renderMain();
+    return;
   }
+  if (!currentUser) { showAuth(); return; }        // must sign in to contribute a shared reading
   input.value = '';
-  userData.openLUs[luId] = true;
-  renderMain();
+  try {
+    await sb.from('shared_readings').insert({ lu_id: luId, reading_type: type, name: text, url: '', descr: '', added_by: currentUser.id });
+    await loadSocial();
+  } catch (e) { console.warn('add shared reading failed', e); }
+  userData.openLUs[luId] = true; renderMain();
 }
 
 function addSubject() {

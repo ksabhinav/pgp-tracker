@@ -14,11 +14,24 @@ per-member progress** that syncs across devices in realtime.
 - **Login is optional.** Without logging in, everything saves to that device.
   Logging in (magic link) syncs your progress across all your devices in realtime.
 
-## Two-layer data model
+## Collaborative features (signed-in members)
+- **Profiles & avatars** — pick an emoji + colour on first sign-in; it shows everywhere you appear.
+- **Completion indicators** — each reading shows avatars of everyone who's finished it, so you can find people to discuss with.
+- **Comments** — a discussion thread on every reading.
+- **Shared readings** — anyone can add a reading to the group; it shows "added by <name>".
+- Anonymous visitors can read the catalog and track locally; social features require login.
+
+## Data model
 | Table | Holds | Who can write |
 |-------|-------|---------------|
-| `catalog` | shared subjects/LUs/readings (one row) | admin email only (RLS) |
-| `progress` | each member's `{checked, extras, openLUs}` | that user only (RLS) |
+| `catalog` | shared subjects/LUs/readings (one row) | admin email only |
+| `inbox` | auto-sync queue from the userscript | anyone inserts; admin reads/clears |
+| `profiles` | name, emoji, colour per user | that user only |
+| `completions` | who finished which reading | that user only |
+| `shared_readings` | member-contributed readings | that member only |
+| `comments` | per-reading discussion | author only |
+
+All social tables are readable by any signed-in user (RLS), writable only by their owner.
 
 ## One-time Supabase setup
 1. In your project, open **SQL Editor → New query**, paste [`schema.sql`](schema.sql), **Run**.

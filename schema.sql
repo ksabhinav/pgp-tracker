@@ -66,6 +66,71 @@ drop policy if exists "inbox admin delete" on public.inbox;
 create policy "inbox admin delete" on public.inbox
   for delete using ((auth.jwt() ->> 'email') = 'ksabhinav20@gmail.com');
 
+-- ── Social layer (profiles, completions, shared readings, comments) ──────────
+-- All readable by any signed-in user; each row writable only by its owner.
+
+create table if not exists public.profiles (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  name       text,
+  emoji      text,
+  color      text,
+  updated_at timestamptz not null default now()
+);
+alter table public.profiles enable row level security;
+drop policy if exists "profiles read" on public.profiles;
+create policy "profiles read" on public.profiles for select using (auth.uid() is not null);
+drop policy if exists "profiles write own" on public.profiles;
+create policy "profiles write own" on public.profiles for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- who has completed which reading (reading_id = catalog or shared-reading id)
+create table if not exists public.completions (
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  reading_id text not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, reading_id)
+);
+alter table public.completions enable row level security;
+drop policy if exists "completions read" on public.completions;
+create policy "completions read" on public.completions for select using (auth.uid() is not null);
+drop policy if exists "completions write own" on public.completions;
+create policy "completions write own" on public.completions for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- member-contributed readings, attributed to whoever added them
+create table if not exists public.shared_readings (
+  id           uuid primary key default gen_random_uuid(),
+  lu_id        text not null,
+  reading_type text not null,          -- 'mandatory' | 'recommended'
+  name         text not null,
+  url          text default '',
+  descr        text default '',
+  added_by     uuid not null references auth.users(id) on delete cascade,
+  created_at   timestamptz not null default now()
+);
+alter table public.shared_readings enable row level security;
+drop policy if exists "shared read" on public.shared_readings;
+create policy "shared read" on public.shared_readings for select using (auth.uid() is not null);
+drop policy if exists "shared write own" on public.shared_readings;
+create policy "shared write own" on public.shared_readings for all
+  using (auth.uid() = added_by) with check (auth.uid() = added_by);
+
+-- per-reading discussion
+create table if not exists public.comments (
+  id         uuid primary key default gen_random_uuid(),
+  reading_id text not null,
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  body       text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.comments enable row level security;
+drop policy if exists "comments read" on public.comments;
+create policy "comments read" on public.comments for select using (auth.uid() is not null);
+drop policy if exists "comments insert own" on public.comments;
+create policy "comments insert own" on public.comments for insert with check (auth.uid() = user_id);
+drop policy if exists "comments delete own" on public.comments;
+create policy "comments delete own" on public.comments for delete using (auth.uid() = user_id);
+
 -- ── Realtime (live sync across devices) ──────────────────────────────────────
 do $$ begin
   alter publication supabase_realtime add table public.catalog;
@@ -75,4 +140,16 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table public.inbox;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.completions;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.shared_readings;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.comments;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.profiles;
 exception when duplicate_object then null; end $$;
