@@ -1027,11 +1027,13 @@ function initials(name) {
 function hashColor(uid) { let h = 0; const k = String(uid); for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) | 0; return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]; }
 function isAvatarId(x) { return x && /^a\d\d$/.test(x); }
 const AVATAR_IDS = Array.from({ length: 40 }, (_, i) => 'a' + String(i + 1).padStart(2, '0'));
+const AV_VER = '3';   // bump when avatar art changes, to bust caches
+function avatarSrc(id) { return `avatars/${id}.svg?v=${AV_VER}`; }
 function avatarHTML(uid, size) {
   const p = profiles[uid] || {}; const s = size || 24;
   const name = p.name || 'Member';
   if (isAvatarId(p.emoji)) {
-    return `<span class="av av-img" data-name="${esc(name)}" aria-label="${esc(name)}" style="width:${s}px;height:${s}px"><img src="avatars/${p.emoji}.svg" alt="" loading="lazy" style="width:100%;height:100%;display:block"></span>`;
+    return `<span class="av av-img" data-name="${esc(name)}" aria-label="${esc(name)}" style="width:${s}px;height:${s}px"><img src="${avatarSrc(p.emoji)}" alt="" loading="lazy" style="width:100%;height:100%;display:block"></span>`;
   }
   const color = p.color || hashColor(uid);
   return `<span class="av" data-name="${esc(name)}" aria-label="${esc(name)}" style="width:${s}px;height:${s}px;background:${color};font-size:${Math.round(s * 0.4)}px">${esc(initials(name))}</span>`;
@@ -1047,13 +1049,13 @@ function openProfile() {
   document.getElementById('profName').value = cur.name || (currentUser ? currentUser.email.split('@')[0] : '');
   selAvatar = isAvatarId(cur.emoji) ? cur.emoji : 'a01';
   document.getElementById('avatarGrid').innerHTML = '<div class="av-row">' +
-    AVATAR_IDS.map(id => `<button class="av-pick" data-id="${id}" onclick="selAvatar='${id}';renderProfPicker()"><img src="avatars/${id}.svg" alt="" loading="lazy"></button>`).join('') +
+    AVATAR_IDS.map(id => `<button class="av-pick" data-id="${id}" onclick="selAvatar='${id}';renderProfPicker()"><img src="${avatarSrc(id)}" alt="" loading="lazy"></button>`).join('') +
     '</div>';
   renderProfPicker();
   document.getElementById('profileModal').classList.add('open');
 }
 function renderProfPicker() {
-  document.getElementById('profPreview').innerHTML = `<img src="avatars/${selAvatar}.svg" alt="" style="width:78px;height:78px;border-radius:50%;box-shadow:var(--shadow-md)">`;
+  document.getElementById('profPreview').innerHTML = `<img src="${avatarSrc(selAvatar)}" alt="" style="width:78px;height:78px;border-radius:50%;box-shadow:var(--shadow-md)">`;
   document.querySelectorAll('.av-pick').forEach(b => b.classList.toggle('sel', b.dataset.id === selAvatar));
 }
 async function saveProfile() {
