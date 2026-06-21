@@ -121,6 +121,8 @@
   .readings-label.recommended { color: var(--gold); }
   .readings-label .badge { font-size: .64rem; padding: 1px 7px; border-radius: 99px; background: var(--brand-soft); color: var(--brand-ink); font-variant-numeric: tabular-nums; }
   .readings-label.recommended .badge { background: var(--gold-soft); color: var(--gold); }
+  .readings-label.suggested { color: #0e7c86; }
+  .readings-label.suggested .badge { background: #e2f3f4; color: #0e7c86; }
 
   /* Reading rows */
   .reading-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--hair); }
@@ -314,7 +316,6 @@
     <div class="subtitle">Post Graduate Programme in Public Policy</div>
     <div id="acctArea" style="margin-top:7px;font-size:.74rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
   </div>
-  <button class="icon-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
   <div class="global-bar-wrap">
     <div class="global-pct" id="globalPct">0%</div>
     <div class="global-label">Overall mandatory readings done</div>
@@ -368,15 +369,6 @@
       <input type="text" id="newSubjectName" placeholder="New subject name…">
       <button onclick="addSubject()">+ Add Subject</button>
       <button onclick="openOutlineImport()" style="margin-top:6px;background:#fff;color:#620D3C;border:1px solid #620D3C">📋 Import Course Outline</button>
-    </div>
-    <div id="setupSection" style="margin:10px 16px 0;">
-      <button class="setup-toggle" onclick="toggleSetup()">🔖 Bookmarklet Setup</button>
-      <div id="setupPanel" style="display:none" class="setup-panel">
-        <div class="setup-title">Auto-import any LU</div>
-        <p>Drag this button to your bookmarks bar. Then on any LU page, click it to copy readings instantly.</p>
-        <a class="bookmarklet-link" href="javascript:(function(){var title=(document.querySelector('h1')||{innerText:''}).innerText.trim()||document.title.split('|')[0].trim();var o=[],m=[],r=[],s=null;var els=[...document.querySelectorAll('strong,b,h1,h2,h3,h4,li,p')];els.forEach(function(el){var tag=el.tagName,text=(el.innerText||'').trim();if(!text||text.length>500)return;if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/learning outcome/i.test(text)){s='o';return;}if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/mandatory reading/i.test(text)){s='m';return;}if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/recommended/i.test(text)){s='r';return;}if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/^notes/i.test(text)){s=null;return;}if(tag==='LI'){var a=el.querySelector('a');var name=a?a.innerText.trim():text.split(/\s[-–]\s/)[0].trim();var desc=a?text.replace(a.innerText,'').replace(/^[\s\-–—]+/,'').trim():text.split(/\s[-–]\s/).slice(1).join('-').trim();var url=a?a.href:'';var id=(s==='m'?'m':'r')+Math.random().toString(36).slice(2,8);if(s==='o')o.push(text.replace(/^\d+\.\s*/,''));else if(s==='m')m.push({id:id,name:name,desc:desc,url:url});else if(s==='r')r.push({id:id,name:name,desc:desc,url:url});}else if(tag==='P'&amp;&amp;s==='o'&amp;&amp;/^\d+\./.test(text)){o.push(text.replace(/^\d+\.\s*/,''));}});var lu={id:'lu'+Date.now(),title:title,url:location.href,selfStudy:/self.?study/i.test(title),outcomes:o,mandatory:m,recommended:r};var json=JSON.stringify(lu);if(navigator.clipboard&amp;&amp;navigator.clipboard.writeText){navigator.clipboard.writeText(json).then(function(){alert('✅ Copied! '+title+'\n'+m.length+' mandatory · '+r.length+' recommended\n\nOpen tracker → Import LU → Paste.');});}else{prompt('Copy this:',json);}})();">📥 Import to PGP Tracker</a>
-        <p style="margin-top:8px;font-size:.7rem;color:#aaa">After clicking on an LU page, open your tracker and click "Import LU" below.</p>
-      </div>
     </div>
     </div>
   </div>
@@ -658,22 +650,8 @@ function saveCatalog() {
 }
 function saveProgress() { saveProgressLocal(); }   // openLUs UI state; completions sync via toggleReading
 
-// ── THEME ─────────────────────────────────────────────────────────────────────
-function applyTheme(t) {
-  document.documentElement.setAttribute('data-theme', t);
-  const btn = document.getElementById('themeToggle'); if (btn) btn.textContent = t === 'dark' ? '☀️' : '🌙';
-  const meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.setAttribute('content', t === 'dark' ? '#1c121a' : '#620D3C');
-}
-function toggleTheme() {
-  const next = (document.documentElement.getAttribute('data-theme') === 'dark') ? 'light' : 'dark';
-  try { localStorage.setItem('pgp_theme', next); } catch (e) {}
-  applyTheme(next);
-}
-(function initTheme() {
-  let t; try { t = localStorage.getItem('pgp_theme'); } catch (e) {}
-  if (!t) t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-  applyTheme(t);
-})();
+// ── THEME (light only) ────────────────────────────────────────────────────────
+document.documentElement.setAttribute('data-theme', 'light');
 
 // ── VIEWS / NAVIGATION ────────────────────────────────────────────────────────
 let currentView = 'readings', searchQuery = '';
@@ -800,9 +778,9 @@ function applyIncomingLU(lu) {
   for (const sub of catalog.subjects) {
     const ex = sub.lus.find(l => norm(l.title) === norm(lu.title));
     if (ex) {
-      mergeReadings(ex, 'mandatory', lu.mandatory);
-      mergeReadings(ex, 'recommended', lu.recommended);
-      if (lu.url) ex.url = lu.url;
+      mergeReadings(ex, 'mandatory', lu.mandatory, lu.forceUrls);
+      mergeReadings(ex, 'recommended', lu.recommended, lu.forceUrls);
+      if (lu.url && !lu.forceUrls) ex.url = lu.url;
       if ((lu.outcomes || []).length && !(ex.outcomes || []).length) ex.outcomes = lu.outcomes;
       if (typeof lu.selfStudy === 'boolean') ex.selfStudy = lu.selfStudy;
       return true;
@@ -1116,12 +1094,11 @@ function findLU(luId) {
   for (const sub of catalog.subjects) { const lu = sub.lus.find(l => l.id === luId); if (lu) return lu; }
   return null;
 }
-// Catalog readings for an LU plus any member-contributed (shared) readings of that type.
-function luReadings(lu, type) {
-  const base = lu[type] || [];
-  const shared = (sharedReadings[lu.id] || []).filter(r => r.reading_type === type)
-    .map(r => ({ id: r.id, name: r.name, desc: r.descr || '', url: r.url || '', added_by: r.added_by }));
-  return base.concat(shared);
+// Mandatory/Recommended are the official catalog list only (no member additions mixed in).
+function luReadings(lu, type) { return lu[type] || []; }
+// Member-contributed suggestions for an LU (shown in their own section, attributed).
+function luSuggested(lu) {
+  return (sharedReadings[lu.id] || []).map(r => ({ id: r.id, name: r.name, desc: r.descr || '', url: r.url || '', added_by: r.added_by }));
 }
 
 function getSubjectStats(sub) {
@@ -1204,7 +1181,6 @@ function renderMain() {
     ${sub.lus.map(lu => renderLUCard(lu, color)).join('')}
     ${isAdmin ? `<div style="display:flex;gap:10px;margin-bottom:16px">
       <button class="add-lu-btn" style="margin-bottom:0" onclick="openAddLU('${sub.id}')">+ Add Learning Unit</button>
-      <button class="add-lu-btn" style="margin-bottom:0;border-color:#620D3C;color:#620D3C" onclick="openImport('${sub.id}')">📥 Import LU</button>
     </div>` : ''}
   `;
 
@@ -1266,9 +1242,8 @@ function renderSearch(panel) {
   const q = searchQuery.toLowerCase();
   const hits = [];
   catalog.subjects.forEach(sub => sub.lus.forEach(lu => {
-    ['mandatory', 'recommended'].forEach(type => luReadings(lu, type).forEach(r => {
-      if ((r.name + ' ' + (r.desc || '')).toLowerCase().includes(q)) hits.push({ r, lu, sub });
-    }));
+    const all = luReadings(lu, 'mandatory').concat(luReadings(lu, 'recommended'), luSuggested(lu));
+    all.forEach(r => { if ((r.name + ' ' + (r.desc || '')).toLowerCase().includes(q)) hits.push({ r, lu, sub }); });
   }));
   const cards = hits.slice(0, 60).map(({ r, lu, sub }) =>
     `<div class="result-card"><div class="result-crumb">${esc(sub.name)} · ${esc(lu.title.replace(/:.*/, ''))}</div>${readingItem(r)}</div>`).join('');
@@ -1301,21 +1276,30 @@ function renderLUCard(lu, color) {
       <div class="readings-section">
         <div class="readings-label mandatory">Mandatory <span class="badge">${s.mandDone}/${s.mandTotal}</span></div>
         ${luReadings(lu, 'mandatory').map(r => readingItem(r)).join('')}
-        <div style="margin-top:10px;display:flex;gap:8px">
-          <input type="text" id="newMand_${lu.id}" placeholder="${isAdmin ? 'Add mandatory reading (official)…' : 'Suggest a reading to the group…'}" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','mandatory')">
-          <button onclick="addReading('${lu.id}','mandatory')" style="padding:6px 12px;background:${color};color:white;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;font-weight:600">+ Add</button>
-        </div>
       </div>
       <div class="readings-section">
         <div class="readings-label recommended">Recommended <span class="badge">${s.recDone}/${s.recTotal}</span></div>
         ${luReadings(lu, 'recommended').map(r => readingItem(r)).join('')}
-        <div style="margin-top:10px;display:flex;gap:8px">
-          <input type="text" id="newRec_${lu.id}" placeholder="${isAdmin ? 'Add recommended reading (official)…' : 'Suggest a reading to the group…'}" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','recommended')">
-          <button onclick="addReading('${lu.id}','recommended')" style="padding:6px 12px;background:#b45309;color:white;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;font-weight:600">+ Add</button>
-        </div>
       </div>
-      ${lu.url ? `<div style="padding:8px 18px 12px;text-align:right"><a href="${esc(lu.url)}" target="_blank" rel="noopener" title="Open on OpenTakshashila" style="font-size:.78rem;color:#620D3C;text-decoration:none;font-weight:600">🔗 Open on OT →</a></div>` : ''}
+      ${renderSuggested(lu)}
+      ${lu.url ? `<div style="padding:8px 18px 12px;text-align:right"><a href="${esc(lu.url)}" target="_blank" rel="noopener" title="Open on OpenTakshashila" style="font-size:.78rem;color:var(--brand-ink);text-decoration:none;font-weight:600">🔗 Open on OT →</a></div>` : ''}
     </div>
+  </div>`;
+}
+
+function renderSuggested(lu) {
+  const sug = luSuggested(lu);
+  const list = sug.length ? sug.map(r => readingItem(r)).join('')
+    : '<div style="font-size:.8rem;color:var(--faint);padding:2px 0 4px">No suggestions yet.</div>';
+  const adder = currentUser
+    ? `<div class="add-row">
+        <input id="newSug_${lu.id}" placeholder="Suggest a reading for the group…" onkeydown="if(event.key==='Enter')addSuggested('${lu.id}')">
+        <button onclick="addSuggested('${lu.id}')">Suggest</button>
+      </div>`
+    : `<div style="font-size:.76rem;color:var(--faint);margin-top:8px"><a onclick="showAuth()" style="cursor:pointer;color:var(--brand-ink)">Sign in</a> to suggest a reading.</div>`;
+  return `<div class="readings-section">
+    <div class="readings-label suggested">Suggested by Participants${sug.length ? ` <span class="badge">${sug.length}</span>` : ''}</div>
+    ${list}${adder}
   </div>`;
 }
 
@@ -1402,24 +1386,17 @@ async function toggleReading(rId) {
   }
 }
 
-async function addReading(luId, type) {
-  const input = document.getElementById((type === 'mandatory' ? 'newMand_' : 'newRec_') + luId);
+// Members (and admin) suggest their own readings — they go to the Suggested section, attributed.
+async function addSuggested(luId) {
+  const input = document.getElementById('newSug_' + luId);
   const text = input && input.value.trim();
   if (!text) return;
-  if (isAdmin) {
-    const lu = findLU(luId);
-    if (!lu) return;
-    lu[type].push({ id: uid(), name: text, desc: '', url: '' });   // official catalog list
-    saveCatalog();
-    input.value = ''; userData.openLUs[luId] = true; renderMain();
-    return;
-  }
-  if (!currentUser) { showAuth(); return; }        // must sign in to contribute a shared reading
+  if (!currentUser) { showAuth(); return; }        // must sign in to suggest
   input.value = '';
   try {
-    await sb.from('shared_readings').insert({ lu_id: luId, reading_type: type, name: text, url: '', descr: '', added_by: currentUser.id });
+    await sb.from('shared_readings').insert({ lu_id: luId, reading_type: 'suggested', name: text, url: '', descr: '', added_by: currentUser.id });
     await loadSocial();
-  } catch (e) { console.warn('add shared reading failed', e); }
+  } catch (e) { console.warn('suggest reading failed', e); }
   userData.openLUs[luId] = true; renderMain();
 }
 
@@ -1520,12 +1497,12 @@ function readingMatch(a, b) {
 }
 
 // Fill in url/desc on existing readings (fuzzy-matched by name) and append any new ones.
-function mergeReadings(lu, type, incoming) {
+function mergeReadings(lu, type, incoming, force) {
   lu[type] = lu[type] || [];
   (incoming || []).forEach(inc => {
     const match = lu[type].find(r => readingMatch(r.name, inc.name));
     if (match) {
-      if (inc.url && !match.url) match.url = inc.url;
+      if (inc.url && (force || !match.url)) match.url = inc.url;   // force overwrites (link corrections)
       if (inc.desc && !match.desc) match.desc = inc.desc;
     } else {
       lu[type].push({ id: uid(), name: inc.name, desc: inc.desc || '', url: inc.url || '' });
