@@ -313,6 +313,10 @@
   .attach-btn:hover { background: var(--brand-soft); border-color: var(--brand-soft); }
   .pdf-chip { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; font-size: .74rem; font-weight: 600; color: var(--brand-ink); background: var(--brand-soft); padding: 3px 9px; border-radius: 99px; text-decoration: none; }
   .pdf-chip:hover { text-decoration: underline; }
+
+  /* activity day separators */
+  .day-break { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--faint); margin: 22px 0 4px; padding-bottom: 5px; border-bottom: 1px solid var(--hair); }
+  .day-break:first-child { margin-top: 0; }
 </style>
 </head>
 <body>
@@ -613,6 +617,8 @@ const DEFAULT_DATA = {
 //   catalog  = shared structure (subjects → LUs → readings), edited only by admin
 //   userData = private per-person { checked, extras (personal readings), openLUs }
 const ADMIN_EMAIL = (((window.PGP_CONFIG || {}).adminEmail) || 'ksabhinav20@gmail.com').toLowerCase();
+// dummy/test accounts: usable, but never shown in public views (activity, completers, people, comments, suggestions)
+const HIDDEN_EMAILS = (((window.PGP_CONFIG || {}).hiddenEmails) || ['ksabhinav38@gmail.com']).map(e => String(e).toLowerCase());
 
 function uid() { return Math.random().toString(36).slice(2, 10); }
 
@@ -901,6 +907,9 @@ async function onSession(session) {
   applyRole(); renderAcct();
   if (currentUser) {
     hideAuth();
+    if (HIDDEN_EMAILS.includes((currentUser.email || '').toLowerCase())) {   // dummy/test account → mark hidden
+      try { await sb.from('profiles').upsert({ user_id: currentUser.id, hidden: true }, { onConflict: 'user_id' }); } catch (e) {}
+    }
     await loadCatalog();
     await loadSocial();                           // profiles, my completions, shared readings, comments
     await migrateChecks();                        // carry over any old local checkmarks
@@ -947,21 +956,24 @@ async function loadSocial() {
   if (!sb || !currentUser) return;
   try {
     const [pf, cm, sr, co] = await Promise.all([
-      sb.from('profiles').select('user_id,name,emoji,color'),
+      sb.from('profiles').select('user_id,name,emoji,color,hidden'),
       sb.from('completions').select('user_id,reading_id,created_at'),
       sb.from('shared_readings').select('*'),
       sb.from('comments').select('*').order('created_at')
     ]);
     profiles = {}; (pf.data || []).forEach(p => profiles[p.user_id] = p);
+    const hidden = new Set(Object.keys(profiles).filter(u => profiles[u].hidden));   // dummy/test accounts
     completers = {}; const mine = {}; const acts = [];
     (cm.data || []).forEach(c => {
+      if (c.user_id === currentUser.id) mine[c.reading_id] = true;   // my own progress (even if I'm hidden)
+      if (hidden.has(c.user_id)) return;                              // hide from public displays
       (completers[c.reading_id] = completers[c.reading_id] || []).push(c.user_id);
-      if (c.user_id === currentUser.id) mine[c.reading_id] = true;
       acts.push({ kind: 'done', user_id: c.user_id, reading_id: c.reading_id, at: c.created_at });
     });
     userData.checked = mine;                       // my completions drive my progress
-    sharedReadings = {}; (sr.data || []).forEach(r => (sharedReadings[r.lu_id] = sharedReadings[r.lu_id] || []).push(r));
+    sharedReadings = {}; (sr.data || []).forEach(r => { if (hidden.has(r.added_by)) return; (sharedReadings[r.lu_id] = sharedReadings[r.lu_id] || []).push(r); });
     comments = {}; (co.data || []).forEach(c => {
+      if (hidden.has(c.user_id)) return;
       (comments[c.reading_id] = comments[c.reading_id] || []).push(c);
       acts.push({ kind: 'comment', user_id: c.user_id, reading_id: c.reading_id, body: c.body, at: c.created_at });
     });
@@ -1044,9 +1056,10 @@ function renderProfPicker() {
 async function saveProfile() {
   const name = document.getElementById('profName').value.trim() || (currentUser.email.split('@')[0]);
   const color = (myProfile && myProfile.color) || hashColor(currentUser.id);
+  const hidden = HIDDEN_EMAILS.includes((currentUser.email || '').toLowerCase());
   try {
-    await sb.from('profiles').upsert({ user_id: currentUser.id, name, emoji: selAvatar, color, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-    myProfile = { user_id: currentUser.id, name, emoji: selAvatar, color };
+    await sb.from('profiles').upsert({ user_id: currentUser.id, name, emoji: selAvatar, color, hidden, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    myProfile = { user_id: currentUser.id, name, emoji: selAvatar, color, hidden };
     profiles[currentUser.id] = myProfile;
   } catch (e) { console.warn('profile save failed', e); }
   closeModal('profileModal');
@@ -1103,6 +1116,15 @@ async function addComment(rId) {
 function deleteComment(id, rId) {
   if (!sb || !currentUser) return;
   sb.from('comments').delete().eq('id', id).then(() => { openComments[rId] = true; loadSocial().then(renderMain); });
+}
+function dayLabel(iso) {
+  const d = new Date(iso), now = new Date();
+  const a = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round((b - a) / 86400000);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: (a.getFullYear() !== b.getFullYear() ? 'numeric' : undefined) });
 }
 function timeAgo(iso) {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -1231,16 +1253,19 @@ function renderActivity(panel) {
     panel.innerHTML = `<div class="empty"><h2>Activity</h2><p><a onclick="showAuth()" style="cursor:pointer">Sign in</a> to see what the cohort is reading and discussing.</p></div>`;
     return;
   }
-  const rows = activityItems.map(a => {
-    const ri = readingIndex[a.reading_id]; if (!ri) return '';
+  let lastDay = ''; const parts = [];
+  activityItems.forEach(a => {
+    const ri = readingIndex[a.reading_id]; if (!ri) return;
+    const dl = dayLabel(a.at);
+    if (dl !== lastDay) { lastDay = dl; parts.push(`<div class="day-break">${dl}</div>`); }
     const who = `<b>${esc(nameOf(a.user_id))}</b>`;
     const where = `<a class="meta-link" onclick="goToReading('${a.reading_id}')">${esc(ri.name)}</a>`;
     const body = a.kind === 'done'
       ? `${who} completed ${where}`
       : `${who} commented on ${where}<div style="color:var(--muted);margin-top:3px">“${esc(a.body)}”</div>`;
-    return `<div class="feed-item">${avatarHTML(a.user_id, 30)}<div style="flex:1;min-width:0"><div class="feed-body">${body}</div><div class="feed-time">${esc(ri.subject)} · ${ri.lu.replace(/:.*/, '')} · ${timeAgo(a.at)}</div></div></div>`;
-  }).join('');
-  panel.innerHTML = `<div class="panel-title">Recent activity</div><div class="panel-sub">Completions and discussions across the cohort.</div>${rows || '<div class="empty"><p>No activity yet — be the first to tick a reading or start a discussion.</p></div>'}`;
+    parts.push(`<div class="feed-item">${avatarHTML(a.user_id, 30)}<div style="flex:1;min-width:0"><div class="feed-body">${body}</div><div class="feed-time">${esc(ri.subject)} · ${ri.lu.replace(/:.*/, '')} · ${timeAgo(a.at)}</div></div></div>`);
+  });
+  panel.innerHTML = `<div class="panel-title">Recent activity</div><div class="panel-sub">Completions and discussions across the cohort.</div>${parts.length ? parts.join('') : '<div class="empty"><p>No activity yet — be the first to tick a reading or start a discussion.</p></div>'}`;
 }
 
 // ── People view ───────────────────────────────────────────────────────────────
@@ -1251,8 +1276,8 @@ function renderPeople(panel) {
   }
   const counts = {};
   Object.values(completers).forEach(list => list.forEach(u => counts[u] = (counts[u] || 0) + 1));
-  // include everyone with a profile, even 0 completions
-  Object.keys(profiles).forEach(u => { if (!(u in counts)) counts[u] = 0; });
+  // include everyone with a (non-hidden) profile, even 0 completions
+  Object.keys(profiles).forEach(u => { if (profiles[u].hidden) return; if (!(u in counts)) counts[u] = 0; });
   const people = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
   const cards = people.map(u => `<div class="person-card">
       ${avatarHTML(u, 42)}
@@ -1280,7 +1305,7 @@ function renderSearch(panel) {
     all.forEach(r => { if ((r.name + ' ' + (r.desc || '')).toLowerCase().includes(q)) hits.push({ r, lu, sub }); });
   }));
   const cards = hits.slice(0, 60).map(({ r, lu, sub }) =>
-    `<div class="result-card"><div class="result-crumb">${esc(sub.name)} · ${esc(lu.title.replace(/:.*/, ''))}</div>${readingItem(r)}</div>`).join('');
+    `<div class="result-card"><div class="result-crumb">${esc(sub.name)} · ${esc(lu.title.replace(/:.*/, ''))}</div>${readingItem(r, lu.url)}</div>`).join('');
   panel.innerHTML = `<div class="panel-title">Search</div><div class="panel-sub">${hits.length} reading${hits.length === 1 ? '' : 's'} matching “${esc(searchQuery)}”${hits.length > 60 ? ' (showing 60)' : ''}.</div>${cards || '<div class="empty"><p>No readings match.</p></div>'}`;
 }
 
@@ -1309,11 +1334,11 @@ function renderLUCard(lu, color) {
       ${lu.outcomes?.length ? `<div class="lu-outcomes"><strong>Learning Outcomes</strong>${lu.outcomes.map((o,i) => `${i+1}. ${esc(o)}`).join(' &nbsp;·&nbsp; ')}</div>` : ''}
       <div class="readings-section">
         <div class="readings-label mandatory">Mandatory <span class="badge">${s.mandDone}/${s.mandTotal}</span></div>
-        ${luReadings(lu, 'mandatory').map(r => readingItem(r)).join('')}
+        ${luReadings(lu, 'mandatory').map(r => readingItem(r, lu.url)).join('')}
       </div>
       <div class="readings-section">
         <div class="readings-label recommended">Recommended <span class="badge">${s.recDone}/${s.recTotal}</span></div>
-        ${luReadings(lu, 'recommended').map(r => readingItem(r)).join('')}
+        ${luReadings(lu, 'recommended').map(r => readingItem(r, lu.url)).join('')}
       </div>
       ${renderSuggested(lu)}
       ${lu.url ? `<div style="padding:8px 18px 12px;text-align:right"><a href="${esc(lu.url)}" target="_blank" rel="noopener" title="Open on OpenTakshashila" style="font-size:.78rem;color:var(--brand-ink);text-decoration:none;font-weight:600">🔗 Open on OT →</a></div>` : ''}
@@ -1338,11 +1363,13 @@ function renderSuggested(lu) {
   </div>`;
 }
 
-function readingItem(r) {
+function readingItem(r, luUrl) {
   const checked = !!userData.checked[r.id];
   const strike = checked ? 'text-decoration:line-through;color:#999;' : '';
-  const nameHtml = r.url
-    ? `<a href="${esc(r.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="reading-name" style="color:#1a4fd6;text-decoration:none;${strike}">${esc(r.name)} <span style="font-size:.72em">↗</span></a>`
+  const link = r.url || luUrl || '';
+  const isFallback = !r.url && !!luUrl;   // no direct link → open the OpenTakshashila lesson page
+  const nameHtml = link
+    ? `<a href="${esc(link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="reading-name" style="text-decoration:none;${strike}">${esc(r.name)} <span style="font-size:.72em;color:var(--faint)">${isFallback ? 'read on OT ↗' : '↗'}</span></a>`
     : `<span class="reading-name" onclick="document.getElementById('cb_${r.id}').click()" style="cursor:pointer;${strike}">${esc(r.name)}</span>`;
   // who has completed this reading
   const done = completers[r.id] || [];

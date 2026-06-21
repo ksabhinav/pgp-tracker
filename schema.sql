@@ -76,6 +76,7 @@ create table if not exists public.profiles (
   color      text,
   updated_at timestamptz not null default now()
 );
+alter table public.profiles add column if not exists hidden boolean default false;  -- dummy/test accounts hidden from public views
 alter table public.profiles enable row level security;
 drop policy if exists "profiles read" on public.profiles;
 create policy "profiles read" on public.profiles for select using (auth.uid() is not null);
