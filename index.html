@@ -783,7 +783,7 @@ function renderLUCard(lu, color) {
           <button onclick="addReading('${lu.id}','recommended')" style="padding:6px 12px;background:#b45309;color:white;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;font-weight:600">+ Add</button>
         </div>
       </div>
-      ${lu.url ? `<div style="padding:8px 18px 12px;text-align:right"><a href="${esc(lu.url)}" target="_blank" rel="noopener" style="font-size:.78rem;color:#620D3C;text-decoration:none;font-weight:600">🔗 Open on OpenTakshashila →</a></div>` : ''}
+      ${lu.url ? `<div style="padding:8px 18px 12px;text-align:right"><a href="${esc(lu.url)}" target="_blank" rel="noopener" title="Open on OpenTakshashila" style="font-size:.78rem;color:#620D3C;text-decoration:none;font-weight:600">🔗 Open on OT →</a></div>` : ''}
     </div>
   </div>`;
 }
