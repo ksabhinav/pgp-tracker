@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PGP10 Reading Tracker</title>
+<meta name="description" content="Track your PGP10 mandatory and recommended readings across subjects.">
+<!-- PWA -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#620D3C">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PGP10">
+<!-- Supabase client + runtime config (config.js holds your project URL + anon key) -->
+<script src="vendor/supabase.min.js"></script>
+<script src="config.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f5f4f0; color: #1a1a1a; min-height: 100vh; }
+  header { background: #620D3C; color: white; padding: 18px 28px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,0.25); }
+  header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.3px; }
+  header .subtitle { font-size: .8rem; opacity: .75; margin-top: 2px; }
+  .global-bar-wrap { min-width: 240px; text-align: right; }
+  .global-pct { font-size: 1.5rem; font-weight: 800; color: #F1A222; }
+  .global-label { font-size: .72rem; opacity: .7; }
+  .bar { height: 8px; background: rgba(255,255,255,.2); border-radius: 99px; margin-top: 6px; overflow: hidden; }
+  .bar-fill { height: 100%; background: #F1A222; border-radius: 99px; transition: width .4s ease; }
+  .layout { display: flex; min-height: calc(100vh - 64px); }
+  .sidebar { width: 240px; min-width: 240px; background: #fff; border-right: 1px solid #e8e3dd; padding: 16px 0; overflow-y: auto; }
+  .sidebar-title { font-size: .68rem; font-weight: 700; color: #888; letter-spacing: .08em; text-transform: uppercase; padding: 0 16px 8px; }
+  .subject-tab { display: flex; align-items: center; gap: 8px; padding: 9px 16px; cursor: pointer; font-size: .88rem; font-weight: 500; border-left: 3px solid transparent; transition: all .15s; }
+  .subject-tab:hover { background: #faf7f4; }
+  .subject-tab.active { border-left-color: #620D3C; background: #fdf5f9; color: #620D3C; font-weight: 600; }
+  .subject-tab .dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .75rem; font-weight: 700; color: white; flex-shrink: 0; }
+  .subject-tab .mini-pct { margin-left: auto; font-size: .75rem; color: #888; font-weight: 600; }
+  .add-subject { margin: 12px 16px 0; }
+  .add-subject input { width: 100%; padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: .82rem; outline: none; }
+  .add-subject input:focus { border-color: #620D3C; }
+  .add-subject button { width: 100%; margin-top: 6px; padding: 7px; background: #620D3C; color: white; border: none; border-radius: 6px; font-size: .82rem; cursor: pointer; font-weight: 600; }
+  .add-subject button:hover { background: #4e0a2e; }
+  .main { flex: 1; padding: 24px 28px; overflow-y: auto; }
+  .subject-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .subject-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 700; color: white; }
+  .subject-name { font-size: 1.4rem; font-weight: 700; }
+  .subject-code { font-size: .82rem; color: #888; margin-top: 2px; }
+  .subject-pct-big { margin-left: auto; font-size: 2rem; font-weight: 800; }
+  .subject-bar { height: 10px; background: #e8e3dd; border-radius: 99px; margin-bottom: 24px; overflow: hidden; }
+  .subject-bar-fill { height: 100%; border-radius: 99px; transition: width .4s ease; }
+  .stats-row { display: flex; gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: white; border-radius: 10px; padding: 14px 18px; flex: 1; border: 1px solid #ece8e3; }
+  .stat-card .val { font-size: 1.6rem; font-weight: 800; }
+  .stat-card .lbl { font-size: .72rem; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+  .stat-card.done .val { color: #22c55e; }
+  .stat-card.mand .val { color: #620D3C; }
+  .stat-card.rec .val { color: #F1A222; }
+  .stat-card.total .val { color: #1a1a1a; }
+  .lu-card { background: white; border-radius: 12px; border: 1px solid #ece8e3; margin-bottom: 14px; overflow: hidden; transition: box-shadow .2s; }
+  .lu-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+  .lu-header { display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer; user-select: none; }
+  .lu-num { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 700; color: white; flex-shrink: 0; }
+  .lu-title { font-size: .95rem; font-weight: 600; flex: 1; }
+  .lu-tag { font-size: .68rem; font-weight: 700; padding: 2px 7px; border-radius: 99px; margin-left: 6px; }
+  .lu-tag.self { background: #fef3c7; color: #92400e; }
+  .lu-progress { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .lu-pct { font-size: .88rem; font-weight: 700; min-width: 36px; text-align: right; }
+  .lu-mini-bar { width: 80px; height: 6px; background: #e8e3dd; border-radius: 99px; overflow: hidden; }
+  .lu-mini-bar-fill { height: 100%; border-radius: 99px; transition: width .4s; }
+  .chevron { transition: transform .2s; font-size: .75rem; color: #aaa; margin-left: 4px; }
+  .lu-card.open .chevron { transform: rotate(90deg); }
+  .lu-body { display: none; border-top: 1px solid #f0ebe6; }
+  .lu-card.open .lu-body { display: block; }
+  .readings-section { padding: 14px 18px; }
+  .readings-section + .readings-section { border-top: 1px solid #f5f2ef; }
+  .readings-label { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .readings-label.mandatory { color: #620D3C; }
+  .readings-label.recommended { color: #b45309; }
+  .readings-label .badge { font-size: .65rem; padding: 1px 6px; border-radius: 99px; background: #fdf5f9; color: #620D3C; border: 1px solid #e8c8d8; }
+  .readings-label.recommended .badge { background: #fef9ec; color: #b45309; border-color: #f0d99a; }
+  .reading-item { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f8f5f2; }
+  .reading-item:last-child { border-bottom: none; }
+  .reading-item input[type=checkbox] { margin-top: 3px; flex-shrink: 0; width: 16px; height: 16px; accent-color: #620D3C; cursor: pointer; }
+  .reading-item label { font-size: .84rem; line-height: 1.45; cursor: pointer; flex: 1; }
+  .reading-item label .reading-name { font-weight: 600; color: #1a1a1a; }
+  .reading-item label .reading-desc { color: #666; font-size: .8rem; display: block; margin-top: 1px; }
+  .reading-item.checked label .reading-name { text-decoration: line-through; color: #999; }
+  .reading-item.checked label .reading-desc { color: #bbb; }
+  .add-lu-btn { border: 2px dashed #ddd; background: transparent; border-radius: 10px; width: 100%; padding: 14px; font-size: .85rem; color: #aaa; cursor: pointer; transition: all .2s; margin-bottom: 16px; }
+  .add-lu-btn:hover { border-color: #620D3C; color: #620D3C; }
+  .empty { text-align: center; padding: 60px 20px; color: #bbb; }
+  .empty h2 { font-size: 1.1rem; margin-bottom: 8px; }
+  .lu-outcomes { padding: 10px 18px; background: #f8f5ff; border-top: 1px solid #ede8f5; font-size: .78rem; color: #5b4080; line-height: 1.7; }
+  .lu-outcomes strong { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 4px; color: #8b6db0; }
+  /* Modal */
+  .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:200; align-items:center; justify-content:center; }
+  .modal-bg.open { display:flex; }
+  .modal { background:#fff; border-radius:14px; padding:24px; width:420px; max-width:95vw; box-shadow:0 20px 60px rgba(0,0,0,.2); }
+  .modal h3 { font-size:1rem; font-weight:700; margin-bottom:14px; color:#620D3C; }
+  .modal input, .modal select { width:100%; padding:9px 12px; border:1px solid #ddd; border-radius:8px; font-size:.88rem; outline:none; margin-bottom:10px; }
+  .modal input:focus { border-color:#620D3C; }
+  .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:4px; }
+  .btn { padding:8px 18px; border-radius:8px; border:none; font-size:.85rem; font-weight:600; cursor:pointer; }
+  .btn-primary { background:#620D3C; color:#fff; }
+  .btn-primary:hover { background:#4e0a2e; }
+  .btn-ghost { background:#f0ebe6; color:#666; }
+  .btn-ghost:hover { color:#333; }
+  /* Bookmarklet setup */
+  .setup-panel { margin:12px 16px 0; background:#fdf5f9; border:1px solid #e8c8d8; border-radius:8px; padding:12px; }
+  .setup-panel .setup-title { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#620D3C; margin-bottom:8px; }
+  .setup-panel p { font-size:.75rem; color:#666; margin-bottom:8px; line-height:1.5; }
+  .bookmarklet-link { display:block; text-align:center; padding:8px 12px; background:#620D3C; color:#fff !important; border-radius:6px; font-size:.8rem; font-weight:700; text-decoration:none; cursor:grab; border:2px dashed rgba(255,255,255,.4); }
+  .bookmarklet-link:hover { background:#4e0a2e; }
+  .setup-toggle { width:100%; background:transparent; border:1px dashed #ddd; border-radius:6px; padding:6px; font-size:.75rem; color:#aaa; cursor:pointer; margin-top:10px; }
+  .setup-toggle:hover { border-color:#620D3C; color:#620D3C; }
+  /* Import modal */
+  .import-modal { width:500px; }
+  .import-modal textarea { width:100%; height:100px; padding:9px 12px; border:1px solid #ddd; border-radius:8px; font-size:.78rem; font-family:monospace; outline:none; resize:vertical; margin-bottom:10px; }
+  .import-modal textarea:focus { border-color:#620D3C; }
+  .import-preview { background:#f8f5f2; border:1px solid #ece8e3; border-radius:8px; padding:12px; margin-bottom:12px; font-size:.8rem; display:none; }
+  .import-preview.show { display:block; }
+  .import-preview h4 { font-weight:700; color:#620D3C; margin-bottom:6px; }
+  .import-preview .imp-stat { color:#666; margin-bottom:3px; }
+  .import-preview .imp-self { display:inline-block; background:#fef3c7; color:#92400e; font-size:.68rem; font-weight:700; padding:1px 6px; border-radius:99px; margin-left:6px; }
+  /* ── Mobile / PWA ── */
+  header { padding-top: calc(18px + env(safe-area-inset-top)); padding-left: calc(28px + env(safe-area-inset-left)); padding-right: calc(28px + env(safe-area-inset-right)); }
+  @media (max-width: 760px) {
+    header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    header h1 { font-size: 1.1rem; }
+    .global-bar-wrap { min-width: 0; width: 100%; text-align: left; }
+    .global-bar-wrap .bar { max-width: 220px; }
+    #syncStatus { text-align: left; }
+    .layout { flex-direction: column; }
+    .sidebar { width: 100%; min-width: 0; border-right: none; border-bottom: 1px solid #e8e3dd; padding: 10px 0; }
+    #subjectTabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px; }
+    .subject-tab { border-left: none; border-radius: 10px; border: 1px solid #ece8e3; padding: 7px 10px; flex: 1 1 calc(50% - 6px); }
+    .subject-tab.active { border-color: #620D3C; }
+    .add-subject, #setupSection { margin-left: 12px; margin-right: 12px; }
+    .main { padding: 16px 14px calc(28px + env(safe-area-inset-bottom)); }
+    .stats-row { flex-wrap: wrap; }
+    .stat-card { flex: 1 1 calc(50% - 6px); }
+    .subject-header { flex-wrap: wrap; }
+    .subject-pct-big { font-size: 1.6rem; }
+    .lu-header { gap: 8px; padding: 12px 14px; }
+    .lu-title { font-size: .9rem; }
+    .lu-mini-bar { width: 48px; }
+    .reading-item input[type=checkbox] { width: 20px; height: 20px; }  /* easier tap target */
+    .modal { width: 94vw !important; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div style="min-width:0">
+    <h1>📚 PGP10 Reading Tracker</h1>
+    <div class="subtitle">Post Graduate Programme in Public Policy</div>
+    <div id="acctArea" style="margin-top:6px;font-size:.72rem;opacity:.85;display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
+  </div>
+  <div class="global-bar-wrap">
+    <div class="global-pct" id="globalPct">0%</div>
+    <div class="global-label">Overall mandatory readings done</div>
+    <div class="bar"><div class="bar-fill" id="globalBar" style="width:0%"></div></div>
+    <div id="syncStatus" style="font-size:.68rem;opacity:.7;margin-top:5px;height:1em"></div>
+  </div>
+</header>
+
+<!-- Auth gate -->
+<div id="authOverlay" style="display:none;position:fixed;inset:0;z-index:500;background:#620D3C;color:#fff;align-items:center;justify-content:center;padding:24px">
+  <div style="background:#fff;color:#1a1a1a;border-radius:18px;padding:30px 26px;width:380px;max-width:94vw;box-shadow:0 24px 70px rgba(0,0,0,.35);text-align:center">
+    <div style="font-size:2.4rem;margin-bottom:6px">📚</div>
+    <h2 style="font-size:1.15rem;color:#620D3C;margin-bottom:4px">PGP10 Reading Tracker</h2>
+    <p style="font-size:.82rem;color:#666;margin-bottom:18px">Sign in to sync your progress across devices.</p>
+    <div id="authForm">
+      <input type="email" id="authEmail" placeholder="you@email.com" autocomplete="email"
+        style="width:100%;padding:11px 13px;border:1px solid #ddd;border-radius:10px;font-size:.92rem;outline:none;margin-bottom:10px"
+        onkeydown="if(event.key==='Enter')sendMagicLink()">
+      <button onclick="sendMagicLink()" id="authBtn"
+        style="width:100%;padding:11px;background:#620D3C;color:#fff;border:none;border-radius:10px;font-size:.92rem;font-weight:700;cursor:pointer">
+        Send me a magic link →
+      </button>
+      <div id="authMsg" style="font-size:.78rem;margin-top:12px;min-height:1.2em;color:#666"></div>
+    </div>
+    <div id="authConfigWarn" style="display:none;font-size:.78rem;color:#b45309;background:#fef9ec;border:1px solid #f0d99a;border-radius:8px;padding:10px;margin-top:10px;text-align:left"></div>
+    <button onclick="useOfflineMode()" style="margin-top:14px;background:transparent;border:none;color:#999;font-size:.74rem;cursor:pointer;text-decoration:underline">Continue offline on this device only</button>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-title">Subjects</div>
+    <div id="subjectTabs"></div>
+    <div class="add-subject" style="margin-top:16px;">
+      <input type="text" id="newSubjectName" placeholder="New subject name…">
+      <button onclick="addSubject()">+ Add Subject</button>
+      <button onclick="openOutlineImport()" style="margin-top:6px;background:#fff;color:#620D3C;border:1px solid #620D3C">📋 Import Course Outline</button>
+    </div>
+    <div id="setupSection" style="margin:10px 16px 0;">
+      <button class="setup-toggle" onclick="toggleSetup()">🔖 Bookmarklet Setup</button>
+      <div id="setupPanel" style="display:none" class="setup-panel">
+        <div class="setup-title">Auto-import any LU</div>
+        <p>Drag this button to your bookmarks bar. Then on any LU page, click it to copy readings instantly.</p>
+        <a class="bookmarklet-link" href="javascript:(function(){var title=(document.querySelector('h1')||{innerText:''}).innerText.trim()||document.title.split('|')[0].trim();var o=[],m=[],r=[],s=null;var els=[...document.querySelectorAll('strong,b,h1,h2,h3,h4,li,p')];els.forEach(function(el){var tag=el.tagName,text=(el.innerText||'').trim();if(!text||text.length>500)return;if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/learning outcome/i.test(text)){s='o';return;}if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/mandatory reading/i.test(text)){s='m';return;}if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/recommended/i.test(text)){s='r';return;}if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/^notes/i.test(text)){s=null;return;}if(tag==='LI'){var a=el.querySelector('a');var name=a?a.innerText.trim():text.split(/\s[-–]\s/)[0].trim();var desc=a?text.replace(a.innerText,'').replace(/^[\s\-–—]+/,'').trim():text.split(/\s[-–]\s/).slice(1).join('-').trim();var id=(s==='m'?'m':'r')+Math.random().toString(36).slice(2,8);if(s==='o')o.push(text.replace(/^\d+\.\s*/,''));else if(s==='m')m.push({id:id,name:name,desc:desc});else if(s==='r')r.push({id:id,name:name,desc:desc});}else if(tag==='P'&amp;&amp;s==='o'&amp;&amp;/^\d+\./.test(text)){o.push(text.replace(/^\d+\.\s*/,''));}});var lu={id:'lu'+Date.now(),title:title,url:location.href,selfStudy:/self.?study/i.test(title),outcomes:o,mandatory:m,recommended:r};var json=JSON.stringify(lu);if(navigator.clipboard&amp;&amp;navigator.clipboard.writeText){navigator.clipboard.writeText(json).then(function(){alert('✅ Copied! '+title+'\n'+m.length+' mandatory · '+r.length+' recommended\n\nOpen tracker → Import LU → Paste.');});}else{prompt('Copy this:',json);}})();">📥 Import to PGP Tracker</a>
+        <p style="margin-top:8px;font-size:.7rem;color:#aaa">After clicking on an LU page, open your tracker and click "Import LU" below.</p>
+      </div>
+    </div>
+  </div>
+  <div class="main" id="mainPanel">
+    <div class="empty"><h2>Select a subject from the sidebar</h2><p>Your progress is saved automatically in your browser.</p></div>
+  </div>
+</div>
+
+<!-- Import LU Modal -->
+<div class="modal-bg" id="importModal">
+  <div class="modal import-modal">
+    <h3>📥 Import LU from Bookmarklet</h3>
+    <p style="font-size:.82rem;color:#666;margin-bottom:10px">Go to any LU page → click the bookmarklet → come back here and paste below.</p>
+    <textarea id="importPaste" placeholder='Paste the copied JSON here…' oninput="previewImport()"></textarea>
+    <div class="import-preview" id="importPreview">
+      <h4 id="impTitle"></h4>
+      <div class="imp-stat" id="impStats"></div>
+      <div class="imp-stat" id="impOutcomes"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('importModal')">Cancel</button>
+      <button class="btn btn-primary" id="importConfirmBtn" onclick="confirmImport()" disabled>Add to Tracker</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Course Outline Modal -->
+<div class="modal-bg" id="outlineModal">
+  <div class="modal import-modal" style="width:560px">
+    <h3>📋 Import Course Outline</h3>
+    <p style="font-size:.82rem;color:#666;margin-bottom:10px">On the PGP10 course page (the <em>Learner's Guide</em> / content list), let it fully load, then <strong>select all</strong> (Cmd+A), <strong>copy</strong> (Cmd+C), and paste below. This builds every subject and its LU cards at once. Readings get filled later via the per-LU bookmarklet.</p>
+    <textarea id="outlinePaste" placeholder="Paste the copied course outline here…" oninput="previewOutline()"></textarea>
+    <div class="import-preview" id="outlinePreview">
+      <h4 id="outlineSummary"></h4>
+      <div id="outlineList" style="max-height:240px;overflow-y:auto;margin-top:8px"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('outlineModal')">Cancel</button>
+      <button class="btn btn-primary" id="outlineConfirmBtn" onclick="confirmOutlineImport()" disabled>Import Selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add LU Modal -->
+<div class="modal-bg" id="addLUModal">
+  <div class="modal">
+    <h3>Add Learning Unit</h3>
+    <input type="text" id="luNumInput" placeholder="e.g. LU-06" />
+    <input type="text" id="luTitleInput" placeholder="Title, e.g. Elasticity and Consumer Surplus" />
+    <input type="text" id="luUrlInput" placeholder="URL (optional)" />
+    <label style="font-size:.8rem;color:#666;display:flex;align-items:center;gap:6px;margin-bottom:10px">
+      <input type="checkbox" id="luSelfStudy" style="width:auto"> Self-study LU
+    </label>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('addLUModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAddLU()">Add LU</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────────────────
+const DEFAULT_DATA = {
+  subjects: [
+    {
+      id: "pp231",
+      name: "PP231: Microeconomics I",
+      code: "Economics · Microeconomics",
+      color: "#620D3C",
+      icon: "📈",
+      lus: [
+        {
+          id: "lu01",
+          title: "LU-01: Introduction to Economic Reasoning",
+          selfStudy: false,
+          url: "https://opentakshashila.net/posts/pgp10-lu-01-introduction-to-economic-reasoning",
+          outcomes: [
+            "Understand the basic assumptions of economics",
+            "Grasp the main themes of microeconomics",
+            "Differentiate between micro and macroeconomics",
+            "Appreciate the difference between normative and positive economics"
+          ],
+          mandatory: [
+            { id: "lu01m01", name: "On Economic Freedom", desc: "Essay by Robert A. Lawson" },
+            { id: "lu01m02", name: "The Addictive Nature of Bad Policies", desc: "Essay by Anupam Manur" },
+            { id: "lu01m03", name: "Incentives Matter", desc: "Econlib article on how people respond to incentives" },
+            { id: "lu01m04", name: "Free Trade", desc: "Essay by Alan Blinder" },
+            { id: "lu01m05", name: "Think on the Margin", desc: "Advantages of thinking on the margin" },
+            { id: "lu01m06", name: "Getting the Most Out of Life: The Concept of Opportunity Cost", desc: "Essay by Russell Roberts" },
+            { id: "lu01m07", name: "Benefit Cost Analysis", desc: "Summary of the Benefit-Cost analysis approach and its drawbacks" },
+            { id: "lu01m08", name: "A Short History of India's Economy", desc: "India's economic policies and the politics behind its transformation" },
+            { id: "lu01m09", name: "Manthan India video on Indian Society as a Changemaker", desc: "Ft. Pranay Kotasthane" }
+          ],
+          recommended: [
+            { id: "lu01r01", name: "Economic Growth", desc: "What is economic growth? Why should we care about it?" },
+            { id: "lu01r02", name: "Incentives, Incentives, Incentives", desc: "More thought-provoking examples of incentives" },
+            { id: "lu01r03", name: "Slavery, Snakes and Switching the Role of Incentives", desc: "Examples of perverse incentives and unintended consequences" },
+            { id: "lu01r04", name: "Margins and Thinking at the Margin", desc: "Marginal costs, Opportunity costs explored" },
+            { id: "lu01r05", name: "Essential Austrian Economics: Marginal Thinking (video)", desc: "Understanding the Diamond Water Paradox through Marginal thinking" },
+            { id: "lu01r06", name: "An EconTalk podcast on Market Failures and Government Failures", desc: "Podcast" },
+            { id: "lu01r07", name: "The Cartoon Introduction to Economics", desc: "A 'seriously' fun book on key economics concepts" }
+          ]
+        },
+        {
+          id: "lu02",
+          title: "LU-02: Price, Value and Cost",
+          selfStudy: true,
+          url: "https://opentakshashila.net/posts/pgp10-lu-02-self-study-price-value-and-cost-103328194",
+          outcomes: [
+            "Differentiate between the three essential concepts of price, value and costs",
+            "Link the concept of value with utility",
+            "Understand the different types of costs that are used in economic analysis"
+          ],
+          mandatory: [
+            { id: "lu02m01", name: "A price is a signal wrapped up in an incentive (video)", desc: "Elaborates on the significance of prices through compelling examples" },
+            { id: "lu02m02", name: "Getting the most out of life: The concept of Opportunity Cost", desc: "Essay by Russell Roberts" },
+            { id: "lu02m03", name: "What is Opportunity Cost (MRU video)", desc: "A video from MRU discussing the concept of opportunity cost" },
+            { id: "lu02m04", name: "Economic Value, the Value of Economists, and the Meaning of Life", desc: "Essay by Don Coursey" }
+          ],
+          recommended: [
+            { id: "lu02r01", name: "Sunk Cost Fallacy", desc: "An essay explaining the concept with illustrations" },
+            { id: "lu02r02", name: "The subjective theory of value and accounting 'cost'", desc: "Detailed explanation of the concept of cost" },
+            { id: "lu02r03", name: "Markets Link the World (MRU video)", desc: "How prices help link people and places all over the world" },
+            { id: "lu02r04", name: "Transaction Cost", desc: "A detailed paper by Douglas Allen on transaction costs" },
+            { id: "lu02r05", name: "Information, Prices, and Socialism's Flaws", desc: "Essay by Morgan Rose on the connection between prices and information" }
+          ]
+        },
+        {
+          id: "lu03",
+          title: "LU-03: Market Equilibrium and Law of Demand",
+          selfStudy: false,
+          url: "https://opentakshashila.net/posts/pgp10-lu-03-market-equilibrium-and-law-of-demand",
+          outcomes: [
+            "Understand why the demand curve is downward sloping",
+            "Move from the individual demand curve to the market demand curve",
+            "Understand the concept of consumer surplus and its link with utility",
+            "Grasp that the demand for each product behaves differently due to elasticity"
+          ],
+          mandatory: [
+            { id: "lu03m01", name: "Demand", desc: "Essay by David R. Henderson" },
+            { id: "lu03m02", name: "The Demand Curve (MRU Video)", desc: "Comprehensive explanation of the inverse relationship and shifts along the demand curve" },
+            { id: "lu03m03", name: "What Shifts the Demand Curve? (MRU Video)", desc: "Detailed video on factors leading to the shift of the demand curve" },
+            { id: "lu03m04", name: "Supply", desc: "Essay by Al Ehrbar" },
+            { id: "lu03m05", name: "The Supply Curve (MRU Video)", desc: "Succinct explanation of the direct relationship between supply and price" },
+            { id: "lu03m06", name: "What Shifts the Supply Curve (MRU Video)?", desc: "Comprehensively explains factors that cause the supply curve to shift" },
+            { id: "lu03m07", name: "The Equilibrium Price and Quantity (MRU Video)", desc: "How prices reach equilibrium and how markets coordinate economic activity" }
+          ],
+          recommended: [
+            { id: "lu03r01", name: "No Yolk: Shortages and Spikes in the Time of COVID", desc: "Essay by Trey Malone and Jayson L. Lusk on demand for eggs during the pandemic" },
+            { id: "lu03r02", name: "The Great Toilet Paper Panic (video)", desc: "Context for the sudden spike in demand for toilet paper in the US in 1973" },
+            { id: "lu03r03", name: "A Cure for Our Health Care Ills: The Supply Side", desc: "Essay by Charles L. Hooper and David R. Henderson on healthcare supply" },
+            { id: "lu03r04", name: "India's hand sanitiser production capacity grew 1,000 times during Covid-19", desc: "News report on increased supply of sanitisers in India during pandemic" },
+            { id: "lu03r05", name: "Where Do Prices Come From?", desc: "Essay by Russell Roberts" },
+            { id: "lu03r06", name: "What rescue puppies teach us about supply and demand", desc: "A story on moving the supply of adoptable dogs to where the demand is" }
+          ]
+        },
+        {
+          id: "lu04",
+          title: "LU-04: Trade and Comparative Advantage",
+          selfStudy: false,
+          url: "https://opentakshashila.net/posts/pgp10-lu-04-trade-and-comparative-advantage",
+          outcomes: [
+            "Understand the benefits of trade and the concepts of absolute and comparative advantage",
+            "Understand the different barriers to trade and how that results in a deadweight loss",
+            "Understand the consequences of following protectionism in trade"
+          ],
+          mandatory: [
+            { id: "lu04m01", name: "Free Trade", desc: "Essay by Alan S. Blinder" },
+            { id: "lu04m02", name: "Treasure Island: The Power of Trade (Part 1 & 2)", desc: "The Seemingly Simple Story of Comparative Advantage" },
+            { id: "lu04m03", name: "Division of Labor", desc: "Essay by Michael Munger" },
+            { id: "lu04m04", name: "Division of Labor: Burgers and Ships (video)", desc: "Explains the explosion of prosperity since the Industrial Revolution" },
+            { id: "lu04m05", name: "A Liberal Trade Regime in an Uncertain World", desc: "Chapter from the book India's Marathon" }
+          ],
+          recommended: [
+            { id: "lu04r01", name: "Comparative Advantage", desc: "Detailed exploration of the concept" },
+            { id: "lu04r02", name: "A Brief History of International Trade Policy", desc: "Historical overview" },
+            { id: "lu04r03", name: "Trade Liberalisation – Why So Much Controversy", desc: "Essay" },
+            { id: "lu04r04", name: "Protectionism", desc: "Essay by Jagdish Bhagwati" },
+            { id: "lu04r05", name: "Notes on Protectionism: Some Popular Myths", desc: "Myths regarding protectionism debunked" }
+          ]
+        },
+        {
+          id: "lu05",
+          title: "LU-05: Government Intervention in Markets",
+          selfStudy: false,
+          url: "https://opentakshashila.net/posts/pgp10-lu-05-government-intervention-in-markets",
+          outcomes: [
+            "Understand why market outcomes produce the most efficient outcomes",
+            "Understand how price ceilings and price floors lead to deadweight losses",
+            "Learn about the incidence of taxes",
+            "Appreciate the difference between tariffs and quotas and their impact on social welfare"
+          ],
+          mandatory: [
+            { id: "lu05m01", name: "Price Controls: Still a Bad Idea", desc: "Essay by David R. Henderson" },
+            { id: "lu05m02", name: "Price Controls", desc: "Essay by Hugh Rockoff" },
+            { id: "lu05m03", name: "Price Ceilings: Shortages and Quality Reduction (MRU video)", desc: "How price ceilings lead to shortage of goods and low-quality goods" },
+            { id: "lu05m04", name: "Price Ceilings: Misallocation of Resources (MRU video)", desc: "How price controls render price signals ineffective" },
+            { id: "lu05m05", name: "Price Ceilings: Deadweight Loss (MRU video)", desc: "How to calculate deadweight loss from price ceilings" },
+            { id: "lu05m06", name: "Rent Control in New York & in Mumbai", desc: "Essays on how rent controls distort incentives of builders and developers" },
+            { id: "lu05m07", name: "Price caps on stents", desc: "Article on how price caps on stents have not benefitted patients" },
+            { id: "lu05m08", name: "Who pays the tax? (MRU video)", desc: "Explains who bears the burden of a tax" },
+            { id: "lu05m09", name: "Tax revenue and deadweight loss (MRU video)", desc: "How taxes affect consumer surplus and producer surplus" },
+            { id: "lu05m10", name: "Subsidies (MRU video)", desc: "How a subsidy plays out and who benefits the most" },
+            { id: "lu05m11", name: "Berkeley has America's first soda tax", desc: "News article on the effectiveness of soda taxes" }
+          ],
+          recommended: [
+            { id: "lu05r01", name: "Price Controls and Their Effects", desc: "A slightly advanced read exploring the effects of price controls" },
+            { id: "lu05r02", name: "Price Controls Cause Shortages", desc: "Essay by George Reisman" },
+            { id: "lu05r03", name: "A Day in the Venezuelan black markets (podcast)", desc: "Consequences of having price controls on various products" },
+            { id: "lu05r04", name: "Uncle Sam wants YOU to fight inflation (podcast)", desc: "Price controls in the US during World War and the resulting underground economy" },
+            { id: "lu05r05", name: "Types of Subsidies", desc: "A slightly advanced but in-depth exploration of subsidies" }
+          ]
+        }
+      ]
+    }
+  ]
+};
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let data = JSON.parse(localStorage.getItem('pgp10tracker_v2') || 'null') || DEFAULT_DATA;
+// Merge: if stored data is missing new LUs from default, add them
+(function mergeLUs() {
+  const defaultSub = DEFAULT_DATA.subjects[0];
+  const stored = data.subjects.find(s => s.id === defaultSub.id);
+  if (!stored) return;
+  defaultSub.lus.forEach(dlu => {
+    if (!stored.lus.find(l => l.id === dlu.id)) stored.lus.push(dlu);
+  });
+})();
+
+let activeSubjectId = data.subjects[0]?.id || null;
+let pendingLUSubjectId = null;
+
+function save() {
+  data.updatedAt = Date.now();
+  localStorage.setItem('pgp10tracker_v2', JSON.stringify(data));
+  schedulePush();
+}
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+// ── SUPABASE + AUTH + SYNC ────────────────────────────────────────────────────
+let sb = null;            // supabase client
+let currentUser = null;   // signed-in user (or null in offline mode)
+let pushTimer = null;
+const CFG = window.PGP_CONFIG || {};
+const isConfigured = () => CFG.url && CFG.anonKey && !/YOUR_/.test(CFG.url) && !/YOUR_/.test(CFG.anonKey);
+
+function setSync(text, tone) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  el.textContent = text || '';
+  el.style.color = tone === 'err' ? '#ffb4b4' : tone === 'ok' ? '#cdebd0' : 'rgba(255,255,255,.7)';
+}
+
+function schedulePush() {
+  if (!sb || !currentUser) return;            // offline/local-only mode: localStorage only
+  clearTimeout(pushTimer);
+  setSync('Saving…');
+  pushTimer = setTimeout(pushRemote, 700);
+}
+
+async function pushRemote() {
+  if (!sb || !currentUser) return;
+  try {
+    const { error } = await sb.from('tracker_state').upsert({
+      user_id: currentUser.id,
+      data: data,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id' });
+    if (error) throw error;
+    setSync('✓ Synced', 'ok');
+    setTimeout(() => setSync(''), 1500);
+  } catch (e) {
+    console.warn('push failed', e);
+    setSync('⚠ Offline — saved locally', 'err');
+  }
+}
+
+async function loadRemote() {
+  if (!sb || !currentUser) return;
+  setSync('Loading…');
+  try {
+    const { data: row, error } = await sb.from('tracker_state')
+      .select('data').eq('user_id', currentUser.id).maybeSingle();
+    if (error) throw error;
+    if (row && row.data && Array.isArray(row.data.subjects)) {
+      data = row.data;                        // remote is source of truth
+      mergeDefaultLUs();
+      localStorage.setItem('pgp10tracker_v2', JSON.stringify(data));
+      setSync('✓ Synced', 'ok');
+    } else {
+      // first sign-in: migrate whatever is in this browser (default + any local progress)
+      await pushRemote();
+    }
+  } catch (e) {
+    console.warn('load failed, using local cache', e);
+    setSync('⚠ Offline — using local copy', 'err');
+  }
+  activeSubjectId = data.subjects[0]?.id || null;
+  setTimeout(() => setSync(''), 1800);
+}
+
+function mergeDefaultLUs() {
+  const defaultSub = DEFAULT_DATA.subjects[0];
+  const stored = data.subjects.find(s => s.id === defaultSub.id);
+  if (!stored) return;
+  defaultSub.lus.forEach(dlu => { if (!stored.lus.find(l => l.id === dlu.id)) stored.lus.push(dlu); });
+}
+
+function renderAcct() {
+  const el = document.getElementById('acctArea');
+  if (!el) return;
+  if (currentUser) {
+    el.innerHTML = `<span>👤 ${esc(currentUser.email)}</span>
+      <button onclick="signOut()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign out</button>`;
+  } else if (isConfigured()) {
+    el.innerHTML = `<span style="color:#F1A222">● Offline (this device only)</span>
+      <button onclick="showAuth()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign in to sync</button>`;
+  } else {
+    el.innerHTML = `<span style="color:#F1A222">● Local mode (Supabase not configured)</span>`;
+  }
+}
+
+function showAuth()  { document.getElementById('authOverlay').style.display = 'flex'; }
+function hideAuth()  { document.getElementById('authOverlay').style.display = 'none'; }
+
+async function sendMagicLink() {
+  const email = document.getElementById('authEmail').value.trim();
+  const msg = document.getElementById('authMsg');
+  const btn = document.getElementById('authBtn');
+  if (!email || !/.+@.+\..+/.test(email)) { msg.style.color = '#c00'; msg.textContent = 'Enter a valid email.'; return; }
+  if (!sb) { msg.style.color = '#c00'; msg.textContent = 'Supabase not configured yet.'; return; }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: location.origin + location.pathname }
+  });
+  btn.disabled = false; btn.textContent = 'Send me a magic link →';
+  if (error) { msg.style.color = '#c00'; msg.textContent = error.message; }
+  else { msg.style.color = '#16a34a'; msg.textContent = '✅ Check your inbox and tap the link — it opens right back here.'; }
+}
+
+async function signOut() {
+  if (sb) await sb.auth.signOut();
+  currentUser = null;
+  renderAcct();
+  showAuth();
+}
+
+function useOfflineMode() {
+  currentUser = null;
+  hideAuth();
+  data = JSON.parse(localStorage.getItem('pgp10tracker_v2') || 'null') || data;
+  mergeDefaultLUs();
+  activeSubjectId = data.subjects[0]?.id || null;
+  renderAll();
+  renderAcct();
+}
+
+async function boot() {
+  // Always show the local cache first so the shell is instant
+  mergeDefaultLUs();
+  renderAll();
+
+  if (!isConfigured()) {
+    // No Supabase yet → pure local mode, no login required
+    hideAuth();
+    renderAcct();
+    return;
+  }
+
+  sb = window.supabase.createClient(CFG.url, CFG.anonKey);
+
+  sb.auth.onAuthStateChange((_event, session) => {
+    currentUser = session?.user || null;
+    if (currentUser) {
+      hideAuth();
+      renderAcct();
+      loadRemote().then(renderAll);
+    }
+  });
+
+  const { data: { session } } = await sb.auth.getSession();
+  currentUser = session?.user || null;
+  if (currentUser) {
+    hideAuth();
+    renderAcct();
+    await loadRemote();
+    renderAll();
+  } else {
+    renderAcct();
+    showAuth();
+  }
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const COLORS = ['#620D3C','#1d4ed8','#059669','#d97706','#7c3aed','#dc2626','#0891b2','#65a30d'];
+function getColor(idx) { return COLORS[idx % COLORS.length]; }
+
+function getSubjectStats(sub) {
+  let mandTotal = 0, mandDone = 0, recTotal = 0, recDone = 0;
+  sub.lus.forEach(lu => {
+    lu.mandatory.forEach(r => { mandTotal++; if (data.checked?.[r.id]) mandDone++; });
+    lu.recommended.forEach(r => { recTotal++; if (data.checked?.[r.id]) recDone++; });
+  });
+  return { mandTotal, mandDone, recTotal, recDone };
+}
+
+function getLUStats(lu) {
+  let mandTotal = lu.mandatory.length, mandDone = 0, recTotal = lu.recommended.length, recDone = 0;
+  lu.mandatory.forEach(r => { if (data.checked?.[r.id]) mandDone++; });
+  lu.recommended.forEach(r => { if (data.checked?.[r.id]) recDone++; });
+  return { mandTotal, mandDone, recTotal, recDone };
+}
+
+function globalStats() {
+  let total = 0, done = 0;
+  data.subjects.forEach(sub => {
+    const s = getSubjectStats(sub);
+    total += s.mandTotal; done += s.mandDone;
+  });
+  return { total, done, pct: total ? Math.round(done / total * 100) : 0 };
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function renderAll() { renderSidebar(); renderMain(); renderGlobal(); }
+
+function renderGlobal() {
+  const g = globalStats();
+  document.getElementById('globalPct').textContent = g.pct + '%';
+  document.getElementById('globalBar').style.width = g.pct + '%';
+}
+
+function renderSidebar() {
+  const cont = document.getElementById('subjectTabs');
+  cont.innerHTML = data.subjects.map((sub, i) => {
+    const s = getSubjectStats(sub);
+    const pct = s.mandTotal ? Math.round(s.mandDone / s.mandTotal * 100) : 0;
+    const color = sub.color || getColor(i);
+    return `<div class="subject-tab ${sub.id === activeSubjectId ? 'active' : ''}" onclick="setActive('${sub.id}')">
+      <div class="dot" style="background:${color}">${sub.icon || sub.name[0]}</div>
+      <div style="flex:1;min-width:0">
+        <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.83rem">${esc(sub.name.replace(/PP\d+:\s*/,''))}</div>
+        <div style="height:3px;background:#eee;border-radius:99px;margin-top:4px"><div style="height:100%;width:${pct}%;background:${color};border-radius:99px;transition:width .3s"></div></div>
+      </div>
+      <div class="mini-pct">${pct}%</div>
+    </div>`;
+  }).join('');
+}
+
+function renderMain() {
+  const panel = document.getElementById('mainPanel');
+  if (!activeSubjectId) { panel.innerHTML = '<div class="empty"><h2>Select a subject</h2></div>'; return; }
+  const subIdx = data.subjects.findIndex(s => s.id === activeSubjectId);
+  const sub = data.subjects[subIdx];
+  if (!sub) return;
+  const color = sub.color || getColor(subIdx);
+  const stats = getSubjectStats(sub);
+  const pct = stats.mandTotal ? Math.round(stats.mandDone / stats.mandTotal * 100) : 0;
+
+  panel.innerHTML = `
+    <div class="subject-header">
+      <div class="subject-icon" style="background:${color}">${sub.icon || sub.name[0]}</div>
+      <div>
+        <div class="subject-name">${esc(sub.name)}</div>
+        <div class="subject-code">${esc(sub.code || '')}</div>
+      </div>
+      <div class="subject-pct-big" style="color:${color}">${pct}%</div>
+      <button onclick="deleteSubject('${sub.id}')" title="Delete this subject" style="margin-left:14px;background:transparent;border:1px solid #e3d7dd;color:#b06;border-radius:8px;padding:6px 10px;font-size:.8rem;cursor:pointer">🗑 Delete</button>
+    </div>
+    <div class="subject-bar"><div class="subject-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+    <div class="stats-row">
+      <div class="stat-card total"><div class="val">${stats.mandTotal + stats.recTotal}</div><div class="lbl">Total Readings</div></div>
+      <div class="stat-card mand"><div class="val">${stats.mandDone}/${stats.mandTotal}</div><div class="lbl">Mandatory Done</div></div>
+      <div class="stat-card rec"><div class="val">${stats.recDone}/${stats.recTotal}</div><div class="lbl">Recommended Done</div></div>
+      <div class="stat-card done"><div class="val">${pct}%</div><div class="lbl">Progress</div></div>
+    </div>
+    ${sub.lus.map(lu => renderLUCard(lu, color)).join('')}
+    <div style="display:flex;gap:10px;margin-bottom:16px">
+      <button class="add-lu-btn" style="margin-bottom:0" onclick="openAddLU('${sub.id}')">+ Add Learning Unit</button>
+      <button class="add-lu-btn" style="margin-bottom:0;border-color:#620D3C;color:#620D3C" onclick="openImport('${sub.id}')">📥 Import LU</button>
+    </div>
+  `;
+
+  // Restore open state
+  sub.lus.forEach(lu => {
+    const card = document.getElementById('lu_' + lu.id);
+    if (card && data.openLUs?.[lu.id]) card.classList.add('open');
+  });
+}
+
+function renderLUCard(lu, color) {
+  const s = getLUStats(lu);
+  const pct = s.mandTotal ? Math.round(s.mandDone / s.mandTotal * 100) : 0;
+  const allMandDone = s.mandTotal > 0 && s.mandDone === s.mandTotal;
+  const luNumMatch = (lu.title || '').match(/LU[-\s]?0*(\d+)/i);
+  const numLabel = luNumMatch ? luNumMatch[1].padStart(2,'0')
+    : (/^lu\d+$/.test(lu.id) ? lu.id.replace('lu','').padStart(2,'0')
+    : ((lu.title || '?').replace(/[^A-Za-z0-9]/g,'').slice(0,2).toUpperCase() || '•'));
+  return `<div class="lu-card" id="lu_${lu.id}">
+    <div class="lu-header" onclick="toggleLU('${lu.id}')">
+      <div class="lu-num" style="background:${allMandDone ? '#22c55e' : color}">${allMandDone ? '✓' : numLabel}</div>
+      <div class="lu-title">
+        ${esc(lu.title)}
+        ${lu.selfStudy ? '<span class="lu-tag self">Self-Study</span>' : ''}
+      </div>
+      <div class="lu-progress">
+        <div class="lu-pct" style="color:${allMandDone ? '#22c55e' : color}">${pct}%</div>
+        <div class="lu-mini-bar"><div class="lu-mini-bar-fill" style="width:${pct}%;background:${allMandDone ? '#22c55e' : color}"></div></div>
+        <span class="chevron">▶</span>
+      </div>
+    </div>
+    <div class="lu-body">
+      ${lu.outcomes?.length ? `<div class="lu-outcomes"><strong>📎 Learning Outcomes</strong>${lu.outcomes.map((o,i) => `${i+1}. ${esc(o)}`).join(' &nbsp;·&nbsp; ')}</div>` : ''}
+      <div class="readings-section">
+        <div class="readings-label mandatory">📌 Mandatory Readings <span class="badge">${s.mandDone}/${s.mandTotal}</span></div>
+        ${lu.mandatory.map(r => readingItem(r)).join('')}
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <input type="text" id="newMand_${lu.id}" placeholder="Add mandatory reading…" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','mandatory')">
+          <button onclick="addReading('${lu.id}','mandatory')" style="padding:6px 12px;background:${color};color:white;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;font-weight:600">+ Add</button>
+        </div>
+      </div>
+      <div class="readings-section">
+        <div class="readings-label recommended">⭐ Recommended Readings <span class="badge">${s.recDone}/${s.recTotal}</span></div>
+        ${lu.recommended.map(r => readingItem(r)).join('')}
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <input type="text" id="newRec_${lu.id}" placeholder="Add recommended reading…" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','recommended')">
+          <button onclick="addReading('${lu.id}','recommended')" style="padding:6px 12px;background:#b45309;color:white;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;font-weight:600">+ Add</button>
+        </div>
+      </div>
+      ${lu.url ? `<div style="padding:8px 18px 12px;text-align:right"><a href="${lu.url}" target="_blank" style="font-size:.78rem;color:#620D3C;text-decoration:none;font-weight:600">🔗 Open on PGP10 →</a></div>` : ''}
+    </div>
+  </div>`;
+}
+
+function readingItem(r) {
+  const checked = !!(data.checked?.[r.id]);
+  return `<div class="reading-item${checked ? ' checked' : ''}" id="ri_${r.id}">
+    <input type="checkbox" id="cb_${r.id}" ${checked ? 'checked' : ''} onchange="toggleReading('${r.id}')">
+    <label for="cb_${r.id}">
+      <span class="reading-name">${esc(r.name)}</span>
+      ${r.desc ? `<span class="reading-desc">${esc(r.desc)}</span>` : ''}
+    </label>
+  </div>`;
+}
+
+// ── ACTIONS ───────────────────────────────────────────────────────────────────
+function setActive(id) { activeSubjectId = id; renderAll(); }
+
+function toggleLU(luId) {
+  const card = document.getElementById('lu_' + luId);
+  const isOpen = card.classList.toggle('open');
+  if (!data.openLUs) data.openLUs = {};
+  data.openLUs[luId] = isOpen;
+  save();
+}
+
+function toggleReading(rId) {
+  if (!data.checked) data.checked = {};
+  data.checked[rId] = !data.checked[rId];
+  save();
+  const item = document.getElementById('ri_' + rId);
+  if (item) item.classList.toggle('checked', data.checked[rId]);
+  // live-update stats without full re-render
+  renderSidebar();
+  renderGlobal();
+  // update LU badge counts and mini bars
+  const sub = data.subjects.find(s => s.id === activeSubjectId);
+  if (!sub) return;
+  const subIdx = data.subjects.indexOf(sub);
+  const color = sub.color || getColor(subIdx);
+  sub.lus.forEach(lu => {
+    const card = document.getElementById('lu_' + lu.id);
+    if (!card) return;
+    const s = getLUStats(lu);
+    const pct = s.mandTotal ? Math.round(s.mandDone / s.mandTotal * 100) : 0;
+    const allDone = s.mandTotal > 0 && s.mandDone === s.mandTotal;
+    const numEl = card.querySelector('.lu-num');
+    const pctEl = card.querySelector('.lu-pct');
+    const fillEl = card.querySelector('.lu-mini-bar-fill');
+    const luNumMatch = (lu.title || '').match(/LU[-\s]?0*(\d+)/i);
+  const numLabel = luNumMatch ? luNumMatch[1].padStart(2,'0')
+    : (/^lu\d+$/.test(lu.id) ? lu.id.replace('lu','').padStart(2,'0')
+    : ((lu.title || '?').replace(/[^A-Za-z0-9]/g,'').slice(0,2).toUpperCase() || '•'));
+    if (numEl) { numEl.textContent = allDone ? '✓' : numLabel; numEl.style.background = allDone ? '#22c55e' : color; }
+    if (pctEl) { pctEl.textContent = pct + '%'; pctEl.style.color = allDone ? '#22c55e' : color; }
+    if (fillEl) { fillEl.style.width = pct + '%'; fillEl.style.background = allDone ? '#22c55e' : color; }
+    // update badge
+    const mandBadge = card.querySelector('.readings-label.mandatory .badge');
+    if (mandBadge) mandBadge.textContent = `${s.mandDone}/${s.mandTotal}`;
+    const recBadge = card.querySelector('.readings-label.recommended .badge');
+    if (recBadge) recBadge.textContent = `${s.recDone}/${s.recTotal}`;
+  });
+  // update subject header stats
+  const stats = getSubjectStats(sub);
+  const pct = stats.mandTotal ? Math.round(stats.mandDone / stats.mandTotal * 100) : 0;
+  const pctBig = document.querySelector('.subject-pct-big');
+  if (pctBig) pctBig.textContent = pct + '%';
+  const barFill = document.querySelector('.subject-bar-fill');
+  if (barFill) barFill.style.width = pct + '%';
+  const statCards = document.querySelectorAll('.stat-card .val');
+  if (statCards.length >= 4) {
+    statCards[0].textContent = stats.mandTotal + stats.recTotal;
+    statCards[1].textContent = `${stats.mandDone}/${stats.mandTotal}`;
+    statCards[2].textContent = `${stats.recDone}/${stats.recTotal}`;
+    statCards[3].textContent = pct + '%';
+  }
+}
+
+function addReading(luId, type) {
+  const inputId = type === 'mandatory' ? `newMand_${luId}` : `newRec_${luId}`;
+  const input = document.getElementById(inputId);
+  const text = input?.value.trim();
+  if (!text) return;
+  const sub = data.subjects.find(s => s.id === activeSubjectId);
+  const lu = sub?.lus.find(l => l.id === luId);
+  if (!lu) return;
+  const r = { id: uid(), name: text, desc: '' };
+  lu[type].push(r);
+  input.value = '';
+  save();
+  // re-render just this LU card section
+  const wasOpen = data.openLUs?.[luId];
+  renderMain();
+  if (wasOpen || true) {
+    const card = document.getElementById('lu_' + luId);
+    if (card) { card.classList.add('open'); if (!data.openLUs) data.openLUs = {}; data.openLUs[luId] = true; }
+  }
+}
+
+function addSubject() {
+  const input = document.getElementById('newSubjectName');
+  const name = input.value.trim();
+  if (!name) return;
+  const idx = data.subjects.length;
+  data.subjects.push({ id: uid(), name, code: '', color: getColor(idx), icon: '📖', lus: [] });
+  input.value = '';
+  save();
+  activeSubjectId = data.subjects[data.subjects.length - 1].id;
+  renderAll();
+}
+
+function openAddLU(subjectId) {
+  pendingLUSubjectId = subjectId;
+  document.getElementById('luNumInput').value = '';
+  document.getElementById('luTitleInput').value = '';
+  document.getElementById('luUrlInput').value = '';
+  document.getElementById('luSelfStudy').checked = false;
+  document.getElementById('addLUModal').classList.add('open');
+  setTimeout(() => document.getElementById('luNumInput').focus(), 50);
+}
+
+function confirmAddLU() {
+  const num = document.getElementById('luNumInput').value.trim();
+  const title = document.getElementById('luTitleInput').value.trim();
+  if (!num || !title) return;
+  const url = document.getElementById('luUrlInput').value.trim();
+  const selfStudy = document.getElementById('luSelfStudy').checked;
+  const sub = data.subjects.find(s => s.id === pendingLUSubjectId);
+  if (!sub) return;
+  const rawId = num.toLowerCase().replace(/[^a-z0-9]/g, '');
+  sub.lus.push({ id: rawId || uid(), title: `${num}: ${title}`, selfStudy, url, outcomes: [], mandatory: [], recommended: [] });
+  save();
+  closeModal('addLUModal');
+  renderMain();
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── IMPORT (bookmarklet) ──────────────────────────────────────────────────────
+let importSubjectId = null;
+let importParsed = null;
+
+function openImport(subjectId) {
+  importSubjectId = subjectId;
+  importParsed = null;
+  document.getElementById('importPaste').value = '';
+  document.getElementById('importPreview').classList.remove('show');
+  document.getElementById('importConfirmBtn').disabled = true;
+  document.getElementById('importModal').classList.add('open');
+  setTimeout(() => document.getElementById('importPaste').focus(), 50);
+}
+
+function previewImport() {
+  const raw = document.getElementById('importPaste').value.trim();
+  const preview = document.getElementById('importPreview');
+  const btn = document.getElementById('importConfirmBtn');
+  importParsed = null;
+  preview.classList.remove('show');
+  btn.disabled = true;
+  if (!raw) return;
+  try {
+    const lu = JSON.parse(raw);
+    if (!lu.title || (!lu.mandatory && !lu.recommended)) return;
+    importParsed = lu;
+    document.getElementById('impTitle').innerHTML =
+      esc(lu.title) + (lu.selfStudy ? '<span class="imp-self">Self-Study</span>' : '');
+    document.getElementById('impStats').textContent =
+      `📌 ${(lu.mandatory||[]).length} mandatory · ⭐ ${(lu.recommended||[]).length} recommended`;
+    document.getElementById('impOutcomes').textContent =
+      lu.outcomes?.length ? `📎 ${lu.outcomes.length} learning outcomes` : '';
+    preview.classList.add('show');
+    btn.disabled = false;
+  } catch(e) {}
+}
+
+function confirmImport() {
+  if (!importParsed || !importSubjectId) return;
+  const sub = data.subjects.find(s => s.id === importSubjectId);
+  if (!sub) return;
+  const lu = importParsed;
+  // avoid duplicate
+  if (sub.lus.find(l => l.id === lu.id || l.title === lu.title)) {
+    if (!confirm('An LU with this title already exists. Add anyway?')) return;
+    lu.id = uid();
+  }
+  // ensure all reading IDs are unique
+  const ensureIds = arr => (arr||[]).map(r => ({...r, id: r.id || uid()}));
+  sub.lus.push({
+    id: lu.id || uid(),
+    title: lu.title,
+    selfStudy: !!lu.selfStudy,
+    url: lu.url || '',
+    outcomes: lu.outcomes || [],
+    mandatory: ensureIds(lu.mandatory),
+    recommended: ensureIds(lu.recommended)
+  });
+  save();
+  closeModal('importModal');
+  renderAll();
+  // auto-open the just-imported LU card
+  setTimeout(() => {
+    const card = document.getElementById('lu_' + sub.lus[sub.lus.length-1].id);
+    if (card) { card.classList.add('open'); card.scrollIntoView({behavior:'smooth', block:'center'}); }
+  }, 100);
+}
+
+// ── IMPORT COURSE OUTLINE (paste the whole content list) ──────────────────────
+let outlineParsed = [];
+
+function norm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+function slugify(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40); }
+function allLuIds() { const set = new Set(); data.subjects.forEach(sub => sub.lus.forEach(l => set.add(l.id))); return set; }
+
+// Parses the copied course-index text into [{name, url, count, lessons:[{title,url,selfStudy}]}]
+function parseOutline(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  const subjects = [];
+  let cur = null;
+  const linkRe = /\[([^\]]+)\]\(([^)]+)\)/;
+  lines.forEach(line => {
+    const bullet = line.match(/^(\s*)[*\-]\s+(.*)$/);
+    if (!bullet) return;
+    const indent = bullet[1].replace(/\t/g, '    ').length;
+    const rest = bullet[2];
+    const lm = rest.match(linkRe);
+    if (!lm) return;
+    const label = lm[1].trim();
+    const href = lm[2].trim();
+    if (!/\/posts\/pgp10-/i.test(href)) return;          // only real content links
+    const isLU = /^LU[-\s]?\d/i.test(label);
+    const lessonsMatch = rest.match(/\b(\d+)\s+Lessons?\b/i);
+    if (!isLU && (indent === 0 || lessonsMatch)) {
+      cur = { name: label, url: href, count: lessonsMatch ? +lessonsMatch[1] : 0, lessons: [] };
+      subjects.push(cur);
+    } else {
+      if (!cur || href === cur.url) return;               // skip strays / self-link
+      if (cur.lessons.some(l => l.url === href || norm(l.title) === norm(label))) return;
+      cur.lessons.push({ title: label, url: href, selfStudy: /self.?study/i.test(label) });
+    }
+  });
+  return subjects;
+}
+
+function openOutlineImport() {
+  outlineParsed = [];
+  document.getElementById('outlinePaste').value = '';
+  document.getElementById('outlinePreview').classList.remove('show');
+  document.getElementById('outlineConfirmBtn').disabled = true;
+  document.getElementById('outlineModal').classList.add('open');
+  setTimeout(() => document.getElementById('outlinePaste').focus(), 50);
+}
+
+function previewOutline() {
+  const raw = document.getElementById('outlinePaste').value;
+  const preview = document.getElementById('outlinePreview');
+  const btn = document.getElementById('outlineConfirmBtn');
+  outlineParsed = parseOutline(raw);
+  if (!outlineParsed.length) { preview.classList.remove('show'); btn.disabled = true; return; }
+  const totalLessons = outlineParsed.reduce((n, s) => n + s.lessons.length, 0);
+  document.getElementById('outlineSummary').textContent =
+    `Found ${outlineParsed.length} section(s) · ${totalLessons} lesson(s). Tick the ones to import:`;
+  document.getElementById('outlineList').innerHTML = outlineParsed.map((s, i) => {
+    const exists = data.subjects.some(d => norm(d.name) === norm(s.name));
+    return `<label style="display:flex;align-items:flex-start;gap:8px;padding:6px 2px;border-bottom:1px solid #efe9e4;font-size:.82rem;cursor:pointer">
+      <input type="checkbox" class="outline-cb" data-idx="${i}" checked style="margin-top:3px;width:15px;height:15px;accent-color:#620D3C">
+      <span><strong>${esc(s.name)}</strong> <span style="color:#888">· ${s.lessons.length} LU${s.lessons.length === 1 ? '' : 's'}${exists ? ' · <span style="color:#b45309">merges into existing</span>' : ''}</span></span>
+    </label>`;
+  }).join('');
+  preview.classList.add('show');
+  btn.disabled = false;
+}
+
+function confirmOutlineImport() {
+  if (!outlineParsed || !outlineParsed.length) return;
+  const chosen = [...document.querySelectorAll('.outline-cb')]
+    .filter(cb => cb.checked).map(cb => outlineParsed[+cb.dataset.idx]);
+  if (!chosen.length) { closeModal('outlineModal'); return; }
+  let firstNewId = null, addedSubs = 0, addedLus = 0;
+  chosen.forEach(sec => {
+    let sub = data.subjects.find(d => norm(d.name) === norm(sec.name));
+    if (!sub) {
+      let sid = 'sub_' + (slugify(sec.name) || uid());
+      while (data.subjects.some(d => d.id === sid)) sid += '_' + uid().slice(0, 3);
+      sub = { id: sid, name: sec.name, code: sec.count ? `${sec.count} lessons` : '', color: getColor(data.subjects.length), icon: '📘', url: sec.url, lus: [] };
+      data.subjects.push(sub);
+      addedSubs++;
+      if (!firstNewId) firstNewId = sub.id;
+    }
+    sec.lessons.forEach(les => {
+      if (sub.lus.some(l => l.url === les.url || norm(l.title) === norm(les.title))) return;
+      const lnm = les.title.match(/LU[-\s]?0*(\d+)/i);
+      let luId = lnm ? sub.id + '_lu' + lnm[1].padStart(2, '0') : sub.id + '_' + (slugify(les.title) || uid());
+      const taken = allLuIds();
+      while (taken.has(luId)) luId += '_' + uid().slice(0, 3);
+      sub.lus.push({ id: luId, title: les.title, selfStudy: !!les.selfStudy, url: les.url, outcomes: [], mandatory: [], recommended: [] });
+      addedLus++;
+    });
+  });
+  save();
+  closeModal('outlineModal');
+  if (firstNewId) activeSubjectId = firstNewId;
+  renderAll();
+  alert(`✅ Imported ${addedSubs} new subject(s) and ${addedLus} LU(s).\nReadings stay empty — fill them per-LU with the bookmarklet.`);
+}
+
+function deleteSubject(id) {
+  const sub = data.subjects.find(s => s.id === id);
+  if (!sub) return;
+  if (!confirm(`Delete "${sub.name}" and its ${sub.lus.length} LU(s)? Your checkmarks for it will be removed. This can't be undone.`)) return;
+  data.subjects = data.subjects.filter(s => s.id !== id);
+  if (activeSubjectId === id) activeSubjectId = data.subjects[0]?.id || null;
+  save();
+  renderAll();
+}
+
+// ── BOOKMARKLET SETUP TOGGLE ──────────────────────────────────────────────────
+function toggleSetup() {
+  const panel = document.getElementById('setupPanel');
+  const btn = document.querySelector('.setup-toggle');
+  const hidden = panel.style.display === 'none';
+  panel.style.display = hidden ? 'block' : 'none';
+  btn.textContent = hidden ? '🔖 Hide Setup' : '🔖 Bookmarklet Setup';
+}
+
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); });
+});
+document.getElementById('luTitleInput').addEventListener('keydown', e => { if (e.key === 'Enter') confirmAddLU(); });
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+boot();
+
+// ── SERVICE WORKER (offline + installable) ────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW failed', err));
+  });
+}
+</script>
+</body>
+</html>
