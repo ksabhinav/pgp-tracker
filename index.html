@@ -1610,8 +1610,10 @@ boot();
 
 // ── SERVICE WORKER (offline + installable) ────────────────────────────────────
 if ('serviceWorker' in navigator) {
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (refreshing) return; refreshing = true; location.reload(); });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW failed', err));
+    navigator.serviceWorker.register('sw.js').then(reg => reg.update()).catch(err => console.warn('SW failed', err));
   });
 }
 </script>
