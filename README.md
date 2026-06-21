@@ -51,6 +51,27 @@ sends no email, so it has no such limit. To enable it:
 
 That's it — "Continue with Google" then works for the admin and every member.
 
+## Auto-sync (hands-off LU import as you browse)
+OpenTakshashila is login-gated + JS-rendered, so a cloud cron can't read it — the
+scrape has to happen in *your* logged-in browser. The userscript does exactly that,
+silently, as you study.
+
+**How it flows:** userscript (on each LU page) → inserts the LU into the `inbox`
+table → your admin tracker drains the inbox on open/focus and merges each LU into
+the shared catalog (backfilling readings + links onto outline-import shells, or
+filing under the LU's subject hint). Zero clicks after setup.
+
+**Setup (once):**
+1. Re-run [`schema.sql`](schema.sql) (it now also creates the `inbox` table — safe to re-run).
+2. Install **Tampermonkey** (Chrome Web Store), then open
+   [`userscript/pgp-autosync.user.js`](userscript/pgp-autosync.user.js)'s **raw** URL —
+   Tampermonkey offers to install it.
+3. Browse PGP10 LU pages as normal. Each shows a "✓ Synced … to PGP Tracker" toast.
+   Open your tracker (signed in as admin) and the readings/links are there.
+
+Install the userscript only in the **admin's** browser — only the admin can merge the
+inbox into the shared catalog.
+
 ## Local development
 ```bash
 cd pgp-tracker
