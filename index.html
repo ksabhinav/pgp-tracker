@@ -1509,9 +1509,26 @@ function dedupeLU(lu) {
     lu[type] = out;
   });
 }
+// Normalised LU identity (ignores the "LU-NN", "(Self-Study)" etc.) for de-duping LUs.
+function luKey(title) { return norm(String(title || '').replace(/^LU[-\s]?\d+/i, '').replace(/\([^)]*\)/g, '').replace(/^[:\s]+/, '')); }
 function cleanupCatalog() {
   const before = JSON.stringify(catalog);
-  catalog.subjects.forEach(s => s.lus.forEach(dedupeLU));
+  catalog.subjects.forEach(sub => {
+    const seen = {}, out = [];
+    sub.lus.forEach(lu => {
+      const k = luKey(lu.title);
+      const ex = k && seen[k];
+      if (ex) {                                    // duplicate LU → merge into the first
+        mergeReadings(ex, 'mandatory', lu.mandatory || []);
+        mergeReadings(ex, 'recommended', lu.recommended || []);
+        if (lu.url && !ex.url) ex.url = lu.url;
+        if ((lu.outcomes || []).length && !(ex.outcomes || []).length) ex.outcomes = lu.outcomes;
+        ex.selfStudy = ex.selfStudy || lu.selfStudy;
+      } else { if (k) seen[k] = lu; out.push(lu); }
+    });
+    out.forEach(dedupeLU);
+    sub.lus = out;
+  });
   return JSON.stringify(catalog) !== before;
 }
 
