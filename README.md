@@ -33,6 +33,24 @@ per-member progress** that syncs across devices in realtime.
 
 `config.js` already holds the project URL, publishable key, and admin email.
 
+## Google sign-in (recommended — avoids email rate limits)
+Supabase's built-in email sender is throttled to a few magic links/hour. Google sign-in
+sends no email, so it has no such limit. To enable it:
+
+1. **Supabase → Authentication → Providers → Google** → toggle on, and copy the shown
+   **Callback URL** (`https://<project>.supabase.co/auth/v1/callback`).
+2. **Google Cloud Console** (console.cloud.google.com) → new/any project:
+   - **APIs & Services → OAuth consent screen**: External; set app name + support email.
+     Either **Publish** it (members see a one-time "unverified app" screen they click past),
+     or keep it in Testing and add each member's Gmail under **Test users**.
+   - **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application**:
+     - Authorized JavaScript origins: `https://ksabhinav.github.io`
+     - Authorized redirect URIs: the **Callback URL** from step 1
+     - Create → copy the **Client ID** and **Client secret**.
+3. Paste Client ID + secret back into the Supabase Google provider → **Save**.
+
+That's it — "Continue with Google" then works for the admin and every member.
+
 ## Local development
 ```bash
 cd pgp-tracker
