@@ -1,45 +1,50 @@
 # 📚 PGP10 Reading Tracker
 
-A mobile-installable (PWA) tracker for PGP10 mandatory & recommended readings, with
-progress synced across devices via Supabase (email magic-link login).
+A mobile-installable (PWA) tracker for PGP10 readings. One **shared catalog** of
+subjects → Learning Units → readings (curated by the admin), and **private
+per-member progress** that syncs across devices in realtime.
 
 **Live app:** https://ksabhinav.github.io/pgp-tracker/
 
-## Features
-- Subjects → Learning Units → mandatory/recommended readings, with live progress bars
-- **Import Course Outline** — paste the PGP10 content list to scaffold every subject + LU at once
-- **Per-LU bookmarklet** — one click on any LU page copies its readings to import
-- **Cross-device sync** via Supabase + private email login (Row-Level Security)
-- **Installable PWA** — "Add to Home Screen" on iOS/Android, works offline
-- Falls back to **local-only mode** (browser storage) if Supabase isn't configured
+## Who can do what
+- **Admin** (`ksabhinav20@gmail.com`) — signs in and can import the course outline,
+  add subjects/LUs, and add shared readings. Edits appear for everyone, live.
+- **Members** — anyone. Tick readings to track progress, and add their *own* private
+  readings (never shown to others). No structural controls, no delete.
+- **Login is optional.** Without logging in, everything saves to that device.
+  Logging in (magic link) syncs your progress across all your devices in realtime.
+
+## Two-layer data model
+| Table | Holds | Who can write |
+|-------|-------|---------------|
+| `catalog` | shared subjects/LUs/readings (one row) | admin email only (RLS) |
+| `progress` | each member's `{checked, extras, openLUs}` | that user only (RLS) |
 
 ## One-time Supabase setup
-1. Go to https://supabase.com → sign in (GitHub works) → **New project**
-   - Name: `pgp-tracker`, region: closest to you (e.g. *South Asia (Mumbai)*), set a DB password.
-2. Wait ~2 min for it to provision.
-3. **SQL Editor → New query** → paste the contents of [`schema.sql`](schema.sql) → **Run**.
-4. **Authentication → Providers → Email** → make sure it's enabled (magic links are on by default).
-5. **Authentication → URL Configuration**:
+1. In your project, open **SQL Editor → New query**, paste [`schema.sql`](schema.sql), **Run**.
+   - It creates both tables, the RLS policies, and enables realtime.
+   - The admin email is hard-coded in the two `catalog` policies — if you ever change
+     `adminEmail` in `config.js`, change it in `schema.sql` too and re-run.
+2. **Authentication → URL Configuration**:
    - **Site URL**: `https://ksabhinav.github.io/pgp-tracker/`
    - **Redirect URLs**: add `https://ksabhinav.github.io/pgp-tracker/`
-6. **Project Settings → API** → copy **Project URL** and the **anon public** key into [`config.js`](config.js).
+3. Open the live app → **Sign in to sync** → use the admin email. On first admin login,
+   the catalog auto-seeds with the bundled PP231 content. Import more as the course runs.
 
-That's it — open the live app, sign in with your email, tap the magic link, and you're synced.
+`config.js` already holds the project URL, publishable key, and admin email.
 
 ## Local development
-Service workers and Supabase auth need `http(s)` (not `file://`):
 ```bash
 cd pgp-tracker
-python3 -m http.server 8080   # then open http://localhost:8080
+python3 -m http.server 8080   # open http://localhost:8080
 ```
 
 ## Files
 | File | Purpose |
 |------|---------|
 | `index.html` | The whole app (UI + logic) |
-| `config.js` | Your Supabase URL + anon key |
-| `schema.sql` | Database table + Row-Level-Security policies |
-| `manifest.webmanifest` | PWA metadata |
-| `sw.js` | Service worker (offline + install) |
-| `vendor/supabase.min.js` | Supabase JS client (vendored for offline use) |
+| `config.js` | Supabase URL, publishable key, admin email |
+| `schema.sql` | Tables + RLS + realtime |
+| `manifest.webmanifest`, `sw.js` | PWA install + offline |
+| `vendor/supabase.min.js` | Supabase client (vendored for offline) |
 | `icons/` | App icons |

@@ -190,6 +190,7 @@
   <div class="sidebar">
     <div class="sidebar-title">Subjects</div>
     <div id="subjectTabs"></div>
+    <div id="adminTools" style="display:none">
     <div class="add-subject" style="margin-top:16px;">
       <input type="text" id="newSubjectName" placeholder="New subject name…">
       <button onclick="addSubject()">+ Add Subject</button>
@@ -200,9 +201,10 @@
       <div id="setupPanel" style="display:none" class="setup-panel">
         <div class="setup-title">Auto-import any LU</div>
         <p>Drag this button to your bookmarks bar. Then on any LU page, click it to copy readings instantly.</p>
-        <a class="bookmarklet-link" href="javascript:(function(){var title=(document.querySelector('h1')||{innerText:''}).innerText.trim()||document.title.split('|')[0].trim();var o=[],m=[],r=[],s=null;var els=[...document.querySelectorAll('strong,b,h1,h2,h3,h4,li,p')];els.forEach(function(el){var tag=el.tagName,text=(el.innerText||'').trim();if(!text||text.length>500)return;if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/learning outcome/i.test(text)){s='o';return;}if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/mandatory reading/i.test(text)){s='m';return;}if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/recommended/i.test(text)){s='r';return;}if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/^notes/i.test(text)){s=null;return;}if(tag==='LI'){var a=el.querySelector('a');var name=a?a.innerText.trim():text.split(/\s[-–]\s/)[0].trim();var desc=a?text.replace(a.innerText,'').replace(/^[\s\-–—]+/,'').trim():text.split(/\s[-–]\s/).slice(1).join('-').trim();var id=(s==='m'?'m':'r')+Math.random().toString(36).slice(2,8);if(s==='o')o.push(text.replace(/^\d+\.\s*/,''));else if(s==='m')m.push({id:id,name:name,desc:desc});else if(s==='r')r.push({id:id,name:name,desc:desc});}else if(tag==='P'&amp;&amp;s==='o'&amp;&amp;/^\d+\./.test(text)){o.push(text.replace(/^\d+\.\s*/,''));}});var lu={id:'lu'+Date.now(),title:title,url:location.href,selfStudy:/self.?study/i.test(title),outcomes:o,mandatory:m,recommended:r};var json=JSON.stringify(lu);if(navigator.clipboard&amp;&amp;navigator.clipboard.writeText){navigator.clipboard.writeText(json).then(function(){alert('✅ Copied! '+title+'\n'+m.length+' mandatory · '+r.length+' recommended\n\nOpen tracker → Import LU → Paste.');});}else{prompt('Copy this:',json);}})();">📥 Import to PGP Tracker</a>
+        <a class="bookmarklet-link" href="javascript:(function(){var title=(document.querySelector('h1')||{innerText:''}).innerText.trim()||document.title.split('|')[0].trim();var o=[],m=[],r=[],s=null;var els=[...document.querySelectorAll('strong,b,h1,h2,h3,h4,li,p')];els.forEach(function(el){var tag=el.tagName,text=(el.innerText||'').trim();if(!text||text.length>500)return;if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/learning outcome/i.test(text)){s='o';return;}if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/mandatory reading/i.test(text)){s='m';return;}if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/recommended/i.test(text)){s='r';return;}if((tag==='STRONG'||tag==='B'||/^H[1-4]$/.test(tag))&amp;&amp;/^notes/i.test(text)){s=null;return;}if(tag==='LI'){var a=el.querySelector('a');var name=a?a.innerText.trim():text.split(/\s[-–]\s/)[0].trim();var desc=a?text.replace(a.innerText,'').replace(/^[\s\-–—]+/,'').trim():text.split(/\s[-–]\s/).slice(1).join('-').trim();var url=a?a.href:'';var id=(s==='m'?'m':'r')+Math.random().toString(36).slice(2,8);if(s==='o')o.push(text.replace(/^\d+\.\s*/,''));else if(s==='m')m.push({id:id,name:name,desc:desc,url:url});else if(s==='r')r.push({id:id,name:name,desc:desc,url:url});}else if(tag==='P'&amp;&amp;s==='o'&amp;&amp;/^\d+\./.test(text)){o.push(text.replace(/^\d+\.\s*/,''));}});var lu={id:'lu'+Date.now(),title:title,url:location.href,selfStudy:/self.?study/i.test(title),outcomes:o,mandatory:m,recommended:r};var json=JSON.stringify(lu);if(navigator.clipboard&amp;&amp;navigator.clipboard.writeText){navigator.clipboard.writeText(json).then(function(){alert('✅ Copied! '+title+'\n'+m.length+' mandatory · '+r.length+' recommended\n\nOpen tracker → Import LU → Paste.');});}else{prompt('Copy this:',json);}})();">📥 Import to PGP Tracker</a>
         <p style="margin-top:8px;font-size:.7rem;color:#aaa">After clicking on an LU page, open your tracker and click "Import LU" below.</p>
       </div>
+    </div>
     </div>
   </div>
   <div class="main" id="mainPanel">
@@ -421,31 +423,62 @@ const DEFAULT_DATA = {
 };
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let data = JSON.parse(localStorage.getItem('pgp10tracker_v2') || 'null') || DEFAULT_DATA;
-// Merge: if stored data is missing new LUs from default, add them
-(function mergeLUs() {
-  const defaultSub = DEFAULT_DATA.subjects[0];
-  const stored = data.subjects.find(s => s.id === defaultSub.id);
-  if (!stored) return;
-  defaultSub.lus.forEach(dlu => {
-    if (!stored.lus.find(l => l.id === dlu.id)) stored.lus.push(dlu);
-  });
-})();
+// Two layers:
+//   catalog  = shared structure (subjects → LUs → readings), edited only by admin
+//   userData = private per-person { checked, extras (personal readings), openLUs }
+const ADMIN_EMAIL = (((window.PGP_CONFIG || {}).adminEmail) || 'ksabhinav20@gmail.com').toLowerCase();
 
-let activeSubjectId = data.subjects[0]?.id || null;
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+function migrateOldStorage() {
+  // One-time split of the old single-blob key into the new two keys.
+  if (localStorage.getItem('pgp_catalog') || localStorage.getItem('pgp_progress')) return;
+  try {
+    const old = JSON.parse(localStorage.getItem('pgp10tracker_v2') || 'null');
+    if (old && Array.isArray(old.subjects)) {
+      localStorage.setItem('pgp_catalog', JSON.stringify({ subjects: old.subjects }));
+      localStorage.setItem('pgp_progress', JSON.stringify({ checked: old.checked || {}, extras: {}, openLUs: old.openLUs || {} }));
+    }
+  } catch (e) {}
+}
+
+function loadLocalCatalog() {
+  try { const c = JSON.parse(localStorage.getItem('pgp_catalog')); if (c && Array.isArray(c.subjects)) return c; } catch (e) {}
+  return JSON.parse(JSON.stringify(DEFAULT_DATA));   // bundled seed (PP231)
+}
+function normalizeProgress(p) {
+  return { checked: (p && p.checked) || {}, extras: (p && p.extras) || {}, openLUs: (p && p.openLUs) || {} };
+}
+function loadLocalProgress() {
+  try { const p = JSON.parse(localStorage.getItem('pgp_progress')); if (p) return normalizeProgress(p); } catch (e) {}
+  return { checked: {}, extras: {}, openLUs: {} };
+}
+function saveCatalogLocal()  { catalog.updatedAt = Date.now(); localStorage.setItem('pgp_catalog', JSON.stringify(catalog)); }
+function saveProgressLocal() { userData.updatedAt = Date.now(); localStorage.setItem('pgp_progress', JSON.stringify(userData)); }
+
+migrateOldStorage();
+let catalog = loadLocalCatalog();
+let userData = loadLocalProgress();
+let activeSubjectId = catalog.subjects[0]?.id || null;
 let pendingLUSubjectId = null;
 
-function save() {
-  data.updatedAt = Date.now();
-  localStorage.setItem('pgp10tracker_v2', JSON.stringify(data));
-  schedulePush();
+// Saves route by what changed: structure → catalog (admin), progress → userData (anyone).
+function saveCatalog() {
+  if (isConfigured() && !isAdmin) { alert('Only the admin can change the shared reading list.'); return; }
+  saveCatalogLocal();
+  if (sb && isAdmin) { clearTimeout(catPushTimer); setSync('Saving…'); catPushTimer = setTimeout(pushCatalog, 600); }
 }
-function uid() { return Math.random().toString(36).slice(2, 10); }
+function saveProgress() {
+  saveProgressLocal();
+  if (sb && currentUser) { clearTimeout(progPushTimer); setSync('Saving…'); progPushTimer = setTimeout(pushProgress, 600); }
+}
 
 // ── SUPABASE + AUTH + SYNC ────────────────────────────────────────────────────
 let sb = null;            // supabase client
-let currentUser = null;   // signed-in user (or null in offline mode)
-let pushTimer = null;
+let currentUser = null;   // signed-in user (null = anonymous, local-only)
+let isAdmin = false;      // currentUser.email === ADMIN_EMAIL
+let catPushTimer = null, progPushTimer = null;
+let catChannel = null, progChannel = null;
 const CFG = window.PGP_CONFIG || {};
 const isConfigured = () => CFG.url && CFG.anonKey && !/YOUR_/.test(CFG.url) && !/YOUR_/.test(CFG.anonKey);
 
@@ -456,173 +489,192 @@ function setSync(text, tone) {
   el.style.color = tone === 'err' ? '#ffb4b4' : tone === 'ok' ? '#cdebd0' : 'rgba(255,255,255,.7)';
 }
 
-function schedulePush() {
-  if (!sb || !currentUser) return;            // offline/local-only mode: localStorage only
-  clearTimeout(pushTimer);
-  setSync('Saving…');
-  pushTimer = setTimeout(pushRemote, 700);
-}
+const canonCat  = c => { try { return JSON.stringify((c && c.subjects) || []); } catch (e) { return ''; } };
+const canonProg = p => { try { return JSON.stringify({ c: p.checked || {}, e: p.extras || {} }); } catch (e) { return ''; } };
 
-async function pushRemote() {
+// ---- push (write) ----
+async function pushCatalog() {
+  catPushTimer = null;
+  if (!sb || !isAdmin) return;
+  try {
+    const { error } = await sb.from('catalog').upsert(
+      { id: 1, data: catalog, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+    if (error) throw error;
+    setSync('✓ Saved', 'ok'); setTimeout(() => setSync(''), 1500);
+  } catch (e) { console.warn('catalog push failed', e); setSync('⚠ Save failed', 'err'); }
+}
+async function pushProgress() {
+  progPushTimer = null;
   if (!sb || !currentUser) return;
   try {
-    const { error } = await sb.from('tracker_state').upsert({
-      user_id: currentUser.id,
-      data: data,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id' });
+    const { error } = await sb.from('progress').upsert(
+      { user_id: currentUser.id, data: userData, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
     if (error) throw error;
-    setSync('✓ Synced', 'ok');
-    setTimeout(() => setSync(''), 1500);
-  } catch (e) {
-    console.warn('push failed', e);
-    setSync('⚠ Offline — saved locally', 'err');
-  }
+    setSync('✓ Synced', 'ok'); setTimeout(() => setSync(''), 1500);
+  } catch (e) { console.warn('progress push failed', e); setSync('⚠ Offline — saved locally', 'err'); }
 }
 
-async function loadRemote() {
+// ---- load (read) ----
+async function loadCatalog() {
+  if (!sb) return;
+  try {
+    const { data: row, error } = await sb.from('catalog').select('data').eq('id', 1).maybeSingle();
+    if (error) throw error;
+    if (row && row.data && Array.isArray(row.data.subjects)) { catalog = row.data; saveCatalogLocal(); }
+    else if (isAdmin) { await pushCatalog(); }   // empty catalog → seed it from local/default
+  } catch (e) { console.warn('catalog load failed, using local', e); }
+  if (!activeSubjectId || !catalog.subjects.some(s => s.id === activeSubjectId))
+    activeSubjectId = catalog.subjects[0]?.id || null;
+}
+async function loadProgress() {
   if (!sb || !currentUser) return;
   setSync('Loading…');
   try {
-    const { data: row, error } = await sb.from('tracker_state')
-      .select('data').eq('user_id', currentUser.id).maybeSingle();
+    const { data: row, error } = await sb.from('progress').select('data').eq('user_id', currentUser.id).maybeSingle();
     if (error) throw error;
-    if (row && row.data && Array.isArray(row.data.subjects)) {
-      data = row.data;                        // remote is source of truth
-      mergeDefaultLUs();
-      localStorage.setItem('pgp10tracker_v2', JSON.stringify(data));
-      setSync('✓ Synced', 'ok');
-    } else {
-      // first sign-in: migrate whatever is in this browser (default + any local progress)
-      await pushRemote();
-    }
-  } catch (e) {
-    console.warn('load failed, using local cache', e);
-    setSync('⚠ Offline — using local copy', 'err');
-  }
-  activeSubjectId = data.subjects[0]?.id || null;
-  setTimeout(() => setSync(''), 1800);
+    if (row && row.data) { userData = normalizeProgress(row.data); saveProgressLocal(); setSync('✓ Synced', 'ok'); }
+    else { await pushProgress(); }               // first login → migrate this device's progress up
+  } catch (e) { console.warn('progress load failed, using local', e); setSync('⚠ Offline', 'err'); }
+  setTimeout(() => setSync(''), 1500);
 }
 
-function mergeDefaultLUs() {
-  const defaultSub = DEFAULT_DATA.subjects[0];
-  const stored = data.subjects.find(s => s.id === defaultSub.id);
-  if (!stored) return;
-  defaultSub.lus.forEach(dlu => { if (!stored.lus.find(l => l.id === dlu.id)) stored.lus.push(dlu); });
+// ---- realtime ----
+function subscribeCatalogRealtime() {
+  if (!sb || catChannel) return;
+  catChannel = sb.channel('catalog-rt')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'catalog' }, payload => {
+      const nd = payload.new && payload.new.data;
+      if (!nd || !Array.isArray(nd.subjects)) return;
+      if (isAdmin && catPushTimer) return;             // don't clobber my own in-flight edit
+      if (canonCat(nd) === canonCat(catalog)) return;  // ignore echo
+      catalog = nd; saveCatalogLocal();
+      if (!catalog.subjects.some(s => s.id === activeSubjectId)) activeSubjectId = catalog.subjects[0]?.id || null;
+      renderAll();
+    }).subscribe();
+}
+function subscribeProgressRealtime() {
+  if (!sb || !currentUser || progChannel) return;
+  progChannel = sb.channel('progress-rt-' + currentUser.id)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'progress', filter: 'user_id=eq.' + currentUser.id }, payload => {
+      const nd = payload.new && payload.new.data;
+      if (!nd) return;
+      if (progPushTimer) return;
+      if (canonProg(normalizeProgress(nd)) === canonProg(userData)) return;
+      userData = normalizeProgress(nd); saveProgressLocal(); renderAll();
+    }).subscribe();
 }
 
+// ---- account UI / roles ----
 function renderAcct() {
   const el = document.getElementById('acctArea');
   if (!el) return;
   if (currentUser) {
-    el.innerHTML = `<span>👤 ${esc(currentUser.email)}</span>
-      <button onclick="signOut()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign out</button>`;
+    el.innerHTML = `<span>👤 ${esc(currentUser.email)}</span>`
+      + (isAdmin ? `<span style="background:#F1A222;color:#3a0a23;border-radius:6px;padding:1px 7px;font-weight:700;font-size:.66rem">ADMIN</span>` : '')
+      + `<button onclick="signOut()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign out</button>`;
   } else if (isConfigured()) {
-    el.innerHTML = `<span style="color:#F1A222">● Offline (this device only)</span>
-      <button onclick="showAuth()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign in to sync</button>`;
+    el.innerHTML = `<span style="color:#F1A222">● Saved on this device</span>`
+      + `<button onclick="showAuth()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign in to sync across devices</button>`;
   } else {
-    el.innerHTML = `<span style="color:#F1A222">● Local mode (Supabase not configured)</span>`;
+    el.innerHTML = `<span style="color:#F1A222">● Local mode</span>`;
   }
 }
+function applyRole() {
+  const t = document.getElementById('adminTools');
+  if (t) t.style.display = isAdmin ? 'block' : 'none';
+}
 
-function showAuth()  { document.getElementById('authOverlay').style.display = 'flex'; }
-function hideAuth()  { document.getElementById('authOverlay').style.display = 'none'; }
+function showAuth() { document.getElementById('authOverlay').style.display = 'flex'; }
+function hideAuth() { document.getElementById('authOverlay').style.display = 'none'; }
+function useOfflineMode() { hideAuth(); }   // login is optional; just dismiss
 
 async function sendMagicLink() {
   const email = document.getElementById('authEmail').value.trim();
   const msg = document.getElementById('authMsg');
   const btn = document.getElementById('authBtn');
   if (!email || !/.+@.+\..+/.test(email)) { msg.style.color = '#c00'; msg.textContent = 'Enter a valid email.'; return; }
-  if (!sb) { msg.style.color = '#c00'; msg.textContent = 'Supabase not configured yet.'; return; }
+  if (!sb) { msg.style.color = '#c00'; msg.textContent = 'Sync isn’t configured yet.'; return; }
   btn.disabled = true; btn.textContent = 'Sending…';
-  const { error } = await sb.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: location.origin + location.pathname }
-  });
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
   btn.disabled = false; btn.textContent = 'Send me a magic link →';
   if (error) { msg.style.color = '#c00'; msg.textContent = error.message; }
   else { msg.style.color = '#16a34a'; msg.textContent = '✅ Check your inbox and tap the link — it opens right back here.'; }
 }
 
 async function signOut() {
-  if (sb) await sb.auth.signOut();
-  currentUser = null;
-  renderAcct();
-  showAuth();
+  if (sb) { try { await sb.auth.signOut(); } catch (e) {} }   // onAuthStateChange handles the rest
 }
 
-function useOfflineMode() {
-  currentUser = null;
-  hideAuth();
-  data = JSON.parse(localStorage.getItem('pgp10tracker_v2') || 'null') || data;
-  mergeDefaultLUs();
-  activeSubjectId = data.subjects[0]?.id || null;
-  renderAll();
-  renderAcct();
+async function onSession(session) {
+  currentUser = session?.user || null;
+  isAdmin = !!(currentUser && currentUser.email && currentUser.email.toLowerCase() === ADMIN_EMAIL);
+  applyRole(); renderAcct();
+  if (currentUser) {
+    hideAuth();
+    await loadCatalog();
+    await loadProgress();
+    subscribeProgressRealtime();
+    renderAll();
+  } else {
+    if (progChannel) { try { sb.removeChannel(progChannel); } catch (e) {} progChannel = null; }
+    userData = loadLocalProgress();
+    renderAll();
+  }
 }
 
 async function boot() {
-  // Always show the local cache first so the shell is instant
-  mergeDefaultLUs();
-  renderAll();
+  renderAll(); renderAcct(); applyRole();      // instant shell from local cache
+  if (!isConfigured()) return;                 // no backend → local-only, no login
+  try { sb = window.supabase.createClient(CFG.url, CFG.anonKey); }
+  catch (e) { console.warn('supabase init failed', e); setSync('⚠ Sync unavailable'); return; }
 
-  if (!isConfigured()) {
-    // No Supabase yet → pure local mode, no login required
-    hideAuth();
-    renderAcct();
-    return;
-  }
+  await loadCatalog(); renderAll();            // catalog is world-readable (works signed-out)
+  subscribeCatalogRealtime();
+  sb.auth.onAuthStateChange((_event, session) => { onSession(session); });   // fires INITIAL_SESSION too
 
-  sb = window.supabase.createClient(CFG.url, CFG.anonKey);
-
-  sb.auth.onAuthStateChange((_event, session) => {
-    currentUser = session?.user || null;
-    if (currentUser) {
-      hideAuth();
-      renderAcct();
-      loadRemote().then(renderAll);
+  // Fallback for any realtime gaps: refetch when the tab regains focus.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && sb) {
+      loadCatalog().then(() => currentUser ? loadProgress() : null).then(renderAll);
     }
   });
-
-  const { data: { session } } = await sb.auth.getSession();
-  currentUser = session?.user || null;
-  if (currentUser) {
-    hideAuth();
-    renderAcct();
-    await loadRemote();
-    renderAll();
-  } else {
-    renderAcct();
-    showAuth();
-  }
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 const COLORS = ['#620D3C','#1d4ed8','#059669','#d97706','#7c3aed','#dc2626','#0891b2','#65a30d'];
 function getColor(idx) { return COLORS[idx % COLORS.length]; }
 
+function findLU(luId) {
+  for (const sub of catalog.subjects) { const lu = sub.lus.find(l => l.id === luId); if (lu) return lu; }
+  return null;
+}
+// Shared readings for an LU plus this member's own personal extras of that type.
+function luReadings(lu, type) {
+  const base = lu[type] || [];
+  const extra = (userData.extras && userData.extras[lu.id]) ? userData.extras[lu.id].filter(r => r.type === type) : [];
+  return base.concat(extra);
+}
+
 function getSubjectStats(sub) {
   let mandTotal = 0, mandDone = 0, recTotal = 0, recDone = 0;
   sub.lus.forEach(lu => {
-    lu.mandatory.forEach(r => { mandTotal++; if (data.checked?.[r.id]) mandDone++; });
-    lu.recommended.forEach(r => { recTotal++; if (data.checked?.[r.id]) recDone++; });
+    luReadings(lu, 'mandatory').forEach(r => { mandTotal++; if (userData.checked[r.id]) mandDone++; });
+    luReadings(lu, 'recommended').forEach(r => { recTotal++; if (userData.checked[r.id]) recDone++; });
   });
   return { mandTotal, mandDone, recTotal, recDone };
 }
 
 function getLUStats(lu) {
-  let mandTotal = lu.mandatory.length, mandDone = 0, recTotal = lu.recommended.length, recDone = 0;
-  lu.mandatory.forEach(r => { if (data.checked?.[r.id]) mandDone++; });
-  lu.recommended.forEach(r => { if (data.checked?.[r.id]) recDone++; });
-  return { mandTotal, mandDone, recTotal, recDone };
+  const mand = luReadings(lu, 'mandatory'), rec = luReadings(lu, 'recommended');
+  let mandDone = 0, recDone = 0;
+  mand.forEach(r => { if (userData.checked[r.id]) mandDone++; });
+  rec.forEach(r => { if (userData.checked[r.id]) recDone++; });
+  return { mandTotal: mand.length, mandDone, recTotal: rec.length, recDone };
 }
 
 function globalStats() {
   let total = 0, done = 0;
-  data.subjects.forEach(sub => {
-    const s = getSubjectStats(sub);
-    total += s.mandTotal; done += s.mandDone;
-  });
+  catalog.subjects.forEach(sub => { const s = getSubjectStats(sub); total += s.mandTotal; done += s.mandDone; });
   return { total, done, pct: total ? Math.round(done / total * 100) : 0 };
 }
 
@@ -637,7 +689,7 @@ function renderGlobal() {
 
 function renderSidebar() {
   const cont = document.getElementById('subjectTabs');
-  cont.innerHTML = data.subjects.map((sub, i) => {
+  cont.innerHTML = catalog.subjects.map((sub, i) => {
     const s = getSubjectStats(sub);
     const pct = s.mandTotal ? Math.round(s.mandDone / s.mandTotal * 100) : 0;
     const color = sub.color || getColor(i);
@@ -655,9 +707,9 @@ function renderSidebar() {
 function renderMain() {
   const panel = document.getElementById('mainPanel');
   if (!activeSubjectId) { panel.innerHTML = '<div class="empty"><h2>Select a subject</h2></div>'; return; }
-  const subIdx = data.subjects.findIndex(s => s.id === activeSubjectId);
-  const sub = data.subjects[subIdx];
-  if (!sub) return;
+  const subIdx = catalog.subjects.findIndex(s => s.id === activeSubjectId);
+  const sub = catalog.subjects[subIdx];
+  if (!sub) { panel.innerHTML = '<div class="empty"><h2>No subjects yet</h2></div>'; return; }
   const color = sub.color || getColor(subIdx);
   const stats = getSubjectStats(sub);
   const pct = stats.mandTotal ? Math.round(stats.mandDone / stats.mandTotal * 100) : 0;
@@ -670,7 +722,6 @@ function renderMain() {
         <div class="subject-code">${esc(sub.code || '')}</div>
       </div>
       <div class="subject-pct-big" style="color:${color}">${pct}%</div>
-      <button onclick="deleteSubject('${sub.id}')" title="Delete this subject" style="margin-left:14px;background:transparent;border:1px solid #e3d7dd;color:#b06;border-radius:8px;padding:6px 10px;font-size:.8rem;cursor:pointer">🗑 Delete</button>
     </div>
     <div class="subject-bar"><div class="subject-bar-fill" style="width:${pct}%;background:${color}"></div></div>
     <div class="stats-row">
@@ -680,16 +731,16 @@ function renderMain() {
       <div class="stat-card done"><div class="val">${pct}%</div><div class="lbl">Progress</div></div>
     </div>
     ${sub.lus.map(lu => renderLUCard(lu, color)).join('')}
-    <div style="display:flex;gap:10px;margin-bottom:16px">
+    ${isAdmin ? `<div style="display:flex;gap:10px;margin-bottom:16px">
       <button class="add-lu-btn" style="margin-bottom:0" onclick="openAddLU('${sub.id}')">+ Add Learning Unit</button>
       <button class="add-lu-btn" style="margin-bottom:0;border-color:#620D3C;color:#620D3C" onclick="openImport('${sub.id}')">📥 Import LU</button>
-    </div>
+    </div>` : ''}
   `;
 
   // Restore open state
   sub.lus.forEach(lu => {
     const card = document.getElementById('lu_' + lu.id);
-    if (card && data.openLUs?.[lu.id]) card.classList.add('open');
+    if (card && userData.openLUs[lu.id]) card.classList.add('open');
   });
 }
 
@@ -718,33 +769,37 @@ function renderLUCard(lu, color) {
       ${lu.outcomes?.length ? `<div class="lu-outcomes"><strong>📎 Learning Outcomes</strong>${lu.outcomes.map((o,i) => `${i+1}. ${esc(o)}`).join(' &nbsp;·&nbsp; ')}</div>` : ''}
       <div class="readings-section">
         <div class="readings-label mandatory">📌 Mandatory Readings <span class="badge">${s.mandDone}/${s.mandTotal}</span></div>
-        ${lu.mandatory.map(r => readingItem(r)).join('')}
+        ${luReadings(lu, 'mandatory').map(r => readingItem(r)).join('')}
         <div style="margin-top:10px;display:flex;gap:8px">
-          <input type="text" id="newMand_${lu.id}" placeholder="Add mandatory reading…" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','mandatory')">
+          <input type="text" id="newMand_${lu.id}" placeholder="${isAdmin ? 'Add mandatory reading (shared)…' : 'Add your own reading (private)…'}" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','mandatory')">
           <button onclick="addReading('${lu.id}','mandatory')" style="padding:6px 12px;background:${color};color:white;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;font-weight:600">+ Add</button>
         </div>
       </div>
       <div class="readings-section">
         <div class="readings-label recommended">⭐ Recommended Readings <span class="badge">${s.recDone}/${s.recTotal}</span></div>
-        ${lu.recommended.map(r => readingItem(r)).join('')}
+        ${luReadings(lu, 'recommended').map(r => readingItem(r)).join('')}
         <div style="margin-top:10px;display:flex;gap:8px">
-          <input type="text" id="newRec_${lu.id}" placeholder="Add recommended reading…" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','recommended')">
+          <input type="text" id="newRec_${lu.id}" placeholder="${isAdmin ? 'Add recommended reading (shared)…' : 'Add your own reading (private)…'}" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','recommended')">
           <button onclick="addReading('${lu.id}','recommended')" style="padding:6px 12px;background:#b45309;color:white;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;font-weight:600">+ Add</button>
         </div>
       </div>
-      ${lu.url ? `<div style="padding:8px 18px 12px;text-align:right"><a href="${lu.url}" target="_blank" style="font-size:.78rem;color:#620D3C;text-decoration:none;font-weight:600">🔗 Open on PGP10 →</a></div>` : ''}
+      ${lu.url ? `<div style="padding:8px 18px 12px;text-align:right"><a href="${esc(lu.url)}" target="_blank" rel="noopener" style="font-size:.78rem;color:#620D3C;text-decoration:none;font-weight:600">🔗 Open on OpenTakshashila →</a></div>` : ''}
     </div>
   </div>`;
 }
 
 function readingItem(r) {
-  const checked = !!(data.checked?.[r.id]);
+  const checked = !!userData.checked[r.id];
+  const strike = checked ? 'text-decoration:line-through;color:#999;' : '';
+  const nameHtml = r.url
+    ? `<a href="${esc(r.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="reading-name" style="color:#1a4fd6;text-decoration:none;${strike}">${esc(r.name)} <span style="font-size:.72em">↗</span></a>`
+    : `<span class="reading-name" onclick="document.getElementById('cb_${r.id}').click()" style="cursor:pointer;${strike}">${esc(r.name)}</span>`;
   return `<div class="reading-item${checked ? ' checked' : ''}" id="ri_${r.id}">
     <input type="checkbox" id="cb_${r.id}" ${checked ? 'checked' : ''} onchange="toggleReading('${r.id}')">
-    <label for="cb_${r.id}">
-      <span class="reading-name">${esc(r.name)}</span>
-      ${r.desc ? `<span class="reading-desc">${esc(r.desc)}</span>` : ''}
-    </label>
+    <div style="flex:1">
+      ${nameHtml}${r.personal ? ' <span class="lu-tag self" style="margin-left:4px">Personal</span>' : ''}
+      ${r.desc ? `<span class="reading-desc" style="${checked ? 'color:#bbb;' : ''}">${esc(r.desc)}</span>` : ''}
+    </div>
   </div>`;
 }
 
@@ -754,93 +809,46 @@ function setActive(id) { activeSubjectId = id; renderAll(); }
 function toggleLU(luId) {
   const card = document.getElementById('lu_' + luId);
   const isOpen = card.classList.toggle('open');
-  if (!data.openLUs) data.openLUs = {};
-  data.openLUs[luId] = isOpen;
-  save();
+  userData.openLUs[luId] = isOpen;
+  saveProgress();
 }
 
 function toggleReading(rId) {
-  if (!data.checked) data.checked = {};
-  data.checked[rId] = !data.checked[rId];
-  save();
-  const item = document.getElementById('ri_' + rId);
-  if (item) item.classList.toggle('checked', data.checked[rId]);
-  // live-update stats without full re-render
-  renderSidebar();
-  renderGlobal();
-  // update LU badge counts and mini bars
-  const sub = data.subjects.find(s => s.id === activeSubjectId);
-  if (!sub) return;
-  const subIdx = data.subjects.indexOf(sub);
-  const color = sub.color || getColor(subIdx);
-  sub.lus.forEach(lu => {
-    const card = document.getElementById('lu_' + lu.id);
-    if (!card) return;
-    const s = getLUStats(lu);
-    const pct = s.mandTotal ? Math.round(s.mandDone / s.mandTotal * 100) : 0;
-    const allDone = s.mandTotal > 0 && s.mandDone === s.mandTotal;
-    const numEl = card.querySelector('.lu-num');
-    const pctEl = card.querySelector('.lu-pct');
-    const fillEl = card.querySelector('.lu-mini-bar-fill');
-    const luNumMatch = (lu.title || '').match(/LU[-\s]?0*(\d+)/i);
-  const numLabel = luNumMatch ? luNumMatch[1].padStart(2,'0')
-    : (/^lu\d+$/.test(lu.id) ? lu.id.replace('lu','').padStart(2,'0')
-    : ((lu.title || '?').replace(/[^A-Za-z0-9]/g,'').slice(0,2).toUpperCase() || '•'));
-    if (numEl) { numEl.textContent = allDone ? '✓' : numLabel; numEl.style.background = allDone ? '#22c55e' : color; }
-    if (pctEl) { pctEl.textContent = pct + '%'; pctEl.style.color = allDone ? '#22c55e' : color; }
-    if (fillEl) { fillEl.style.width = pct + '%'; fillEl.style.background = allDone ? '#22c55e' : color; }
-    // update badge
-    const mandBadge = card.querySelector('.readings-label.mandatory .badge');
-    if (mandBadge) mandBadge.textContent = `${s.mandDone}/${s.mandTotal}`;
-    const recBadge = card.querySelector('.readings-label.recommended .badge');
-    if (recBadge) recBadge.textContent = `${s.recDone}/${s.recTotal}`;
-  });
-  // update subject header stats
-  const stats = getSubjectStats(sub);
-  const pct = stats.mandTotal ? Math.round(stats.mandDone / stats.mandTotal * 100) : 0;
-  const pctBig = document.querySelector('.subject-pct-big');
-  if (pctBig) pctBig.textContent = pct + '%';
-  const barFill = document.querySelector('.subject-bar-fill');
-  if (barFill) barFill.style.width = pct + '%';
-  const statCards = document.querySelectorAll('.stat-card .val');
-  if (statCards.length >= 4) {
-    statCards[0].textContent = stats.mandTotal + stats.recTotal;
-    statCards[1].textContent = `${stats.mandDone}/${stats.mandTotal}`;
-    statCards[2].textContent = `${stats.recDone}/${stats.recTotal}`;
-    statCards[3].textContent = pct + '%';
-  }
+  userData.checked[rId] = !userData.checked[rId];
+  saveProgress();
+  renderAll();   // re-render keeps open cards open (state in userData.openLUs)
 }
 
 function addReading(luId, type) {
-  const inputId = type === 'mandatory' ? `newMand_${luId}` : `newRec_${luId}`;
-  const input = document.getElementById(inputId);
-  const text = input?.value.trim();
+  const input = document.getElementById((type === 'mandatory' ? 'newMand_' : 'newRec_') + luId);
+  const text = input && input.value.trim();
   if (!text) return;
-  const sub = data.subjects.find(s => s.id === activeSubjectId);
-  const lu = sub?.lus.find(l => l.id === luId);
-  if (!lu) return;
-  const r = { id: uid(), name: text, desc: '' };
-  lu[type].push(r);
-  input.value = '';
-  save();
-  // re-render just this LU card section
-  const wasOpen = data.openLUs?.[luId];
-  renderMain();
-  if (wasOpen || true) {
-    const card = document.getElementById('lu_' + luId);
-    if (card) { card.classList.add('open'); if (!data.openLUs) data.openLUs = {}; data.openLUs[luId] = true; }
+  if (isAdmin) {
+    const lu = findLU(luId);
+    if (!lu) return;
+    lu[type].push({ id: uid(), name: text, desc: '', url: '' });   // shared list
+    saveCatalog();
+  } else {
+    if (!userData.extras[luId]) userData.extras[luId] = [];
+    userData.extras[luId].push({ id: uid(), name: text, desc: '', url: '', type, personal: true });  // private to this member
+    saveProgress();
   }
+  input.value = '';
+  userData.openLUs[luId] = true;
+  renderMain();
 }
 
 function addSubject() {
   const input = document.getElementById('newSubjectName');
   const name = input.value.trim();
   if (!name) return;
-  const idx = data.subjects.length;
-  data.subjects.push({ id: uid(), name, code: '', color: getColor(idx), icon: '📖', lus: [] });
+  const idx = catalog.subjects.length;
+  const sub = { id: 'sub_' + (slugify(name) || uid()), name, code: '', color: getColor(idx), icon: '📖', lus: [] };
+  while (catalog.subjects.some(s => s.id === sub.id)) sub.id += '_' + uid().slice(0, 3);
+  catalog.subjects.push(sub);
   input.value = '';
-  save();
-  activeSubjectId = data.subjects[data.subjects.length - 1].id;
+  activeSubjectId = sub.id;
+  saveCatalog();
   renderAll();
 }
 
@@ -860,11 +868,13 @@ function confirmAddLU() {
   if (!num || !title) return;
   const url = document.getElementById('luUrlInput').value.trim();
   const selfStudy = document.getElementById('luSelfStudy').checked;
-  const sub = data.subjects.find(s => s.id === pendingLUSubjectId);
+  const sub = catalog.subjects.find(s => s.id === pendingLUSubjectId);
   if (!sub) return;
-  const rawId = num.toLowerCase().replace(/[^a-z0-9]/g, '');
-  sub.lus.push({ id: rawId || uid(), title: `${num}: ${title}`, selfStudy, url, outcomes: [], mandatory: [], recommended: [] });
-  save();
+  let luId = sub.id + '_' + (num.toLowerCase().replace(/[^a-z0-9]/g, '') || uid());
+  const taken = allLuIds();
+  while (taken.has(luId)) luId += '_' + uid().slice(0, 3);
+  sub.lus.push({ id: luId, title: `${num}: ${title}`, selfStudy, url, outcomes: [], mandatory: [], recommended: [] });
+  saveCatalog();
   closeModal('addLUModal');
   renderMain();
 }
@@ -910,18 +920,20 @@ function previewImport() {
 
 function confirmImport() {
   if (!importParsed || !importSubjectId) return;
-  const sub = data.subjects.find(s => s.id === importSubjectId);
+  const sub = catalog.subjects.find(s => s.id === importSubjectId);
   if (!sub) return;
   const lu = importParsed;
   // avoid duplicate
-  if (sub.lus.find(l => l.id === lu.id || l.title === lu.title)) {
+  if (sub.lus.find(l => norm(l.title) === norm(lu.title))) {
     if (!confirm('An LU with this title already exists. Add anyway?')) return;
-    lu.id = uid();
   }
-  // ensure all reading IDs are unique
-  const ensureIds = arr => (arr||[]).map(r => ({...r, id: r.id || uid()}));
+  let luId = sub.id + '_' + (lu.id || uid());
+  const taken = allLuIds();
+  while (taken.has(luId)) luId += '_' + uid().slice(0, 3);
+  // ensure all reading IDs are unique (and keep their url if the bookmarklet captured one)
+  const ensureIds = arr => (arr || []).map(r => ({ ...r, id: r.id || uid(), url: r.url || '' }));
   sub.lus.push({
-    id: lu.id || uid(),
+    id: luId,
     title: lu.title,
     selfStudy: !!lu.selfStudy,
     url: lu.url || '',
@@ -929,7 +941,7 @@ function confirmImport() {
     mandatory: ensureIds(lu.mandatory),
     recommended: ensureIds(lu.recommended)
   });
-  save();
+  saveCatalog();
   closeModal('importModal');
   renderAll();
   // auto-open the just-imported LU card
@@ -944,7 +956,7 @@ let outlineParsed = [];
 
 function norm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
 function slugify(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40); }
-function allLuIds() { const set = new Set(); data.subjects.forEach(sub => sub.lus.forEach(l => set.add(l.id))); return set; }
+function allLuIds() { const set = new Set(); catalog.subjects.forEach(sub => sub.lus.forEach(l => set.add(l.id))); return set; }
 
 // Parses the copied course-index text into [{name, url, count, lessons:[{title,url,selfStudy}]}]
 function parseOutline(text) {
@@ -995,7 +1007,7 @@ function previewOutline() {
   document.getElementById('outlineSummary').textContent =
     `Found ${outlineParsed.length} section(s) · ${totalLessons} lesson(s). Tick the ones to import:`;
   document.getElementById('outlineList').innerHTML = outlineParsed.map((s, i) => {
-    const exists = data.subjects.some(d => norm(d.name) === norm(s.name));
+    const exists = catalog.subjects.some(d => norm(d.name) === norm(s.name));
     return `<label style="display:flex;align-items:flex-start;gap:8px;padding:6px 2px;border-bottom:1px solid #efe9e4;font-size:.82rem;cursor:pointer">
       <input type="checkbox" class="outline-cb" data-idx="${i}" checked style="margin-top:3px;width:15px;height:15px;accent-color:#620D3C">
       <span><strong>${esc(s.name)}</strong> <span style="color:#888">· ${s.lessons.length} LU${s.lessons.length === 1 ? '' : 's'}${exists ? ' · <span style="color:#b45309">merges into existing</span>' : ''}</span></span>
@@ -1012,12 +1024,12 @@ function confirmOutlineImport() {
   if (!chosen.length) { closeModal('outlineModal'); return; }
   let firstNewId = null, addedSubs = 0, addedLus = 0;
   chosen.forEach(sec => {
-    let sub = data.subjects.find(d => norm(d.name) === norm(sec.name));
+    let sub = catalog.subjects.find(d => norm(d.name) === norm(sec.name));
     if (!sub) {
       let sid = 'sub_' + (slugify(sec.name) || uid());
-      while (data.subjects.some(d => d.id === sid)) sid += '_' + uid().slice(0, 3);
-      sub = { id: sid, name: sec.name, code: sec.count ? `${sec.count} lessons` : '', color: getColor(data.subjects.length), icon: '📘', url: sec.url, lus: [] };
-      data.subjects.push(sub);
+      while (catalog.subjects.some(d => d.id === sid)) sid += '_' + uid().slice(0, 3);
+      sub = { id: sid, name: sec.name, code: sec.count ? `${sec.count} lessons` : '', color: getColor(catalog.subjects.length), icon: '📘', url: sec.url, lus: [] };
+      catalog.subjects.push(sub);
       addedSubs++;
       if (!firstNewId) firstNewId = sub.id;
     }
@@ -1031,21 +1043,11 @@ function confirmOutlineImport() {
       addedLus++;
     });
   });
-  save();
+  saveCatalog();
   closeModal('outlineModal');
   if (firstNewId) activeSubjectId = firstNewId;
   renderAll();
   alert(`✅ Imported ${addedSubs} new subject(s) and ${addedLus} LU(s).\nReadings stay empty — fill them per-LU with the bookmarklet.`);
-}
-
-function deleteSubject(id) {
-  const sub = data.subjects.find(s => s.id === id);
-  if (!sub) return;
-  if (!confirm(`Delete "${sub.name}" and its ${sub.lus.length} LU(s)? Your checkmarks for it will be removed. This can't be undone.`)) return;
-  data.subjects = data.subjects.filter(s => s.id !== id);
-  if (activeSubjectId === id) activeSubjectId = data.subjects[0]?.id || null;
-  save();
-  renderAll();
 }
 
 // ── BOOKMARKLET SETUP TOGGLE ──────────────────────────────────────────────────
