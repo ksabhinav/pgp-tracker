@@ -627,7 +627,7 @@ async function drainInbox() {
     }
   });
   try { await sb.from('inbox').delete().in('id', ids); } catch (e) { console.warn('inbox clear failed', e); }
-  if (merged) { saveCatalog(); renderAll(); setSync('✓ Auto-synced ' + merged + ' LU' + (merged > 1 ? 's' : ''), 'ok'); setTimeout(() => setSync(''), 2500); }
+  if (merged) { cleanupCatalog(); saveCatalog(); renderAll(); setSync('✓ Auto-synced ' + merged + ' LU' + (merged > 1 ? 's' : ''), 'ok'); setTimeout(() => setSync(''), 2500); }
 }
 
 function subscribeInboxRealtime() {
@@ -697,7 +697,11 @@ async function onSession(session) {
     await loadCatalog();
     await loadProgress();
     subscribeProgressRealtime();
-    if (isAdmin) { subscribeInboxRealtime(); await drainInbox(); }   // pull anything the userscript queued
+    if (isAdmin) {
+      subscribeInboxRealtime();
+      await drainInbox();                         // pull anything the userscript queued
+      if (cleanupCatalog()) saveCatalog();        // collapse any fuzzy-duplicate readings
+    }
     renderAll();
   } else {
     if (progChannel) { try { sb.removeChannel(progChannel); } catch (e) {} progChannel = null; }
@@ -1006,11 +1010,27 @@ function previewImport() {
   } catch(e) {}
 }
 
-// Fill in url/desc on existing readings (matched by name) and append any new ones.
+// Fuzzy reading-name match — the page's link text rarely equals the seed's
+// descriptive name (e.g. "…video on X" vs "X"), so compare leniently.
+function rclean(x) { return norm(x).replace(/\([^)]*\)/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim(); }
+function readingMatch(a, b) {
+  a = rclean(a); b = rclean(b);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const sh = a.length <= b.length ? a : b, lo = a.length <= b.length ? b : a;
+  if (sh.length >= 10 && lo.indexOf(sh) !== -1) return true;        // one contains the other
+  const ta = new Set(a.split(' ').filter(w => w.length > 2));
+  const tb = b.split(' ').filter(w => w.length > 2);
+  if (!ta.size || !tb.length) return false;
+  const common = tb.filter(w => ta.has(w)).length;                 // strong token overlap
+  return common >= 4 && common >= Math.ceil(Math.min(ta.size, tb.length) * 0.7);
+}
+
+// Fill in url/desc on existing readings (fuzzy-matched by name) and append any new ones.
 function mergeReadings(lu, type, incoming) {
   lu[type] = lu[type] || [];
   (incoming || []).forEach(inc => {
-    const match = lu[type].find(r => norm(r.name) === norm(inc.name));
+    const match = lu[type].find(r => readingMatch(r.name, inc.name));
     if (match) {
       if (inc.url && !match.url) match.url = inc.url;
       if (inc.desc && !match.desc) match.desc = inc.desc;
@@ -1018,6 +1038,25 @@ function mergeReadings(lu, type, incoming) {
       lu[type].push({ id: uid(), name: inc.name, desc: inc.desc || '', url: inc.url || '' });
     }
   });
+}
+
+// Collapse fuzzy-duplicate readings within an LU, keeping the first (seed) entry —
+// which preserves its id and any checkmarks — and lifting the link onto it.
+function dedupeLU(lu) {
+  ['mandatory', 'recommended'].forEach(type => {
+    const arr = lu[type] || [], out = [];
+    arr.forEach(r => {
+      const ex = out.find(o => readingMatch(o.name, r.name));
+      if (ex) { if (!ex.url && r.url) ex.url = r.url; if (!ex.desc && r.desc) ex.desc = r.desc; }
+      else out.push(r);
+    });
+    lu[type] = out;
+  });
+}
+function cleanupCatalog() {
+  const before = JSON.stringify(catalog);
+  catalog.subjects.forEach(s => s.lus.forEach(dedupeLU));
+  return JSON.stringify(catalog) !== before;
 }
 
 function confirmImport() {
