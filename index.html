@@ -19,7 +19,7 @@
 <script src="config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg:#f6f5f2; --surface:#ffffff; --surface-2:#faf8f6;
@@ -210,12 +210,81 @@
     .reading-item input[type=checkbox] { width: 20px; height: 20px; }
     .modal { width: 96vw; }
   }
+
+  /* ════ CRAFT PASS — type, declutter, motion ════ */
+  :root { --display: 'Bricolage Grotesque', 'Hanken Grotesk', system-ui, sans-serif; --ease: cubic-bezier(.2,.8,.2,1); }
+  body { font-family: 'Hanken Grotesk', system-ui, -apple-system, sans-serif; letter-spacing: -.005em; }
+  header h1, .subject-name, .panel-title, .modal h3 { font-family: var(--display); letter-spacing: -.035em; font-weight: 800; }
+  .subject-pct-big, .stat-card .val, .global-pct, .lu-pct, .lu-num, .ring-pct { font-family: var(--display); letter-spacing: -.03em; font-feature-settings: 'tnum' 1; }
+  .subject-name { font-size: 1.55rem; }
+  header h1 { font-size: 1.18rem; }
+
+  /* brand mark */
+  .brand-mark { width: 26px; height: 26px; border-radius: 7px; vertical-align: -6px; margin-right: 2px; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+
+  /* declutter: unify the four stats into one flat strip */
+  .stats-row { gap: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .stat-card { border: 0; border-right: 1px solid var(--hair); border-radius: 0; box-shadow: none; background: transparent; transition: background .15s; }
+  .stat-card:last-child { border-right: 0; }
+  .stat-card:hover { background: var(--surface-2); }
+
+  /* nav / sidebar feel */
+  .nav-item, .subject-tab { position: relative; transition: background .15s, color .15s, padding .15s; }
+  .nav-item:hover, .subject-tab:hover { padding-left: 15px; }
+  .nav-item.active { padding-left: 12px; }
+  .nav-item.active::before, .subject-tab.active::before { content:''; position:absolute; left:0; top:18%; bottom:18%; width:3px; border-radius:0 3px 3px 0; background: var(--brand); }
+
+  /* cards: lift + accent on hover */
+  .lu-card { transition: transform .2s var(--ease), box-shadow .2s, border-color .2s; }
+  .lu-card:hover { transform: translateY(-2px); border-color: var(--brand-soft); }
+  .lu-header:hover .lu-title { color: var(--brand-ink); }
+  .lu-num { transition: transform .2s var(--ease); }
+  .lu-card:hover .lu-num { transform: scale(1.06) rotate(-3deg); }
+
+  /* reading rows: hover highlight + reveal meta */
+  .reading-item { border-bottom: 1px solid var(--hair); border-radius: 10px; margin: 0 -10px; padding: 10px; transition: background .14s; }
+  .reading-item:last-child { border-bottom: 0; }
+  .reading-item:hover { background: var(--surface-2); }
+  .reading-meta { opacity: .72; transition: opacity .15s; }
+  .reading-item:hover .reading-meta { opacity: 1; }
+  .meta-link { padding: 2px 8px; border-radius: 99px; transition: background .14s, color .14s; }
+  .meta-link:hover { background: var(--brand-soft); }
+
+  /* avatars: pop on hover, raise above stack */
+  .av { transition: transform .15s var(--ease); cursor: default; }
+  .av:hover { transform: scale(1.18) translateY(-1px); z-index: 5; position: relative; }
+
+  /* people + result cards lift */
+  .person-card, .result-card { transition: transform .2s var(--ease), box-shadow .2s, border-color .2s; }
+  .person-card:hover, .result-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--brand-soft); }
+  .feed-item { transition: background .14s; border-radius: 10px; margin: 0 -10px; padding: 13px 10px; }
+  .feed-item:hover { background: var(--surface-2); }
+
+  /* buttons */
+  .btn, .icon-btn, .add-row button, .add-subject button { transition: transform .12s var(--ease), filter .15s, background .15s; }
+  .btn:active, .icon-btn:active, .add-row button:active { transform: scale(.96); }
+  .icon-btn:hover { transform: rotate(-12deg); }
+  .add-lu-btn:hover { background: var(--brand-soft); transform: translateY(-1px); }
+
+  /* section labels — quieter, no emoji */
+  .readings-label { letter-spacing: .12em; opacity: .9; }
+
+  /* progress ring */
+  .ring-wrap { position: relative; width: 56px; height: 56px; margin-left: auto; flex-shrink: 0; }
+  .ring-pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: .92rem; font-weight: 800; }
+  .ring-wrap svg circle.track { stroke: var(--border); }
+
+  /* view entrance */
+  @keyframes rise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+  .view-enter { animation: rise .26s var(--ease); }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
 <header>
   <div style="min-width:0;flex:1">
-    <h1>📚 PGP10 Reading Tracker</h1>
+    <h1><img src="icons/favicon-32.png" class="brand-mark" alt="">PGP10 Reading Tracker</h1>
     <div class="subtitle">Post Graduate Programme in Public Policy</div>
     <div id="acctArea" style="margin-top:7px;font-size:.74rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
   </div>
@@ -263,9 +332,9 @@
       <span style="color:var(--faint)">🔎</span>
       <input id="searchInput" placeholder="Search readings…" oninput="onSearch()" autocomplete="off">
     </div>
-    <div class="nav-item active" id="nav-readings" onclick="setView('readings')"><span class="ico">📖</span> Readings</div>
-    <div class="nav-item" id="nav-activity" onclick="setView('activity')"><span class="ico">🕑</span> Activity</div>
-    <div class="nav-item" id="nav-people" onclick="setView('people')"><span class="ico">👥</span> People</div>
+    <div class="nav-item active" id="nav-readings" onclick="setView('readings')">Readings</div>
+    <div class="nav-item" id="nav-activity" onclick="setView('activity')">Activity</div>
+    <div class="nav-item" id="nav-people" onclick="setView('people')">People</div>
     <div class="sidebar-title">Subjects</div>
     <div id="subjectTabs"></div>
     <div id="adminTools" style="display:none">
@@ -588,6 +657,7 @@ function setView(v) {
   const si = document.getElementById('searchInput'); if (si) si.value = '';
   ['readings', 'activity', 'people'].forEach(n => { const el = document.getElementById('nav-' + n); if (el) el.classList.toggle('active', n === v); });
   renderMain();
+  const mp = document.getElementById('mainPanel'); if (mp) { mp.classList.remove('view-enter'); void mp.offsetWidth; mp.classList.add('view-enter'); }
 }
 function onSearch() {
   searchQuery = (document.getElementById('searchInput').value || '').trim();
@@ -1001,6 +1071,14 @@ function timeAgo(iso) {
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 const COLORS = ['#620D3C','#1d4ed8','#059669','#d97706','#7c3aed','#dc2626','#0891b2','#65a30d'];
 function getColor(idx) { return COLORS[idx % COLORS.length]; }
+function subjGlyph(sub) { const n = (sub.name || '').replace(/^PP\d+:\s*/, ''); const m = n.match(/[A-Za-z0-9]/); return (m ? m[0] : '?').toUpperCase(); }
+function progressRing(pct, color, size) {
+  size = size || 56; const sw = 5, r = (size - sw) / 2, c = 2 * Math.PI * r, off = c * (1 - (pct || 0) / 100);
+  return `<div class="ring-wrap" style="width:${size}px;height:${size}px"><svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="transform:rotate(-90deg)">
+    <circle class="track" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="${sw}"/>
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" style="transition:stroke-dashoffset .6s var(--ease)"/>
+  </svg><div class="ring-pct" style="color:${color}">${pct}%</div></div>`;
+}
 
 function findLU(luId) {
   for (const sub of catalog.subjects) { const lu = sub.lus.find(l => l.id === luId); if (lu) return lu; }
@@ -1053,7 +1131,7 @@ function renderSidebar() {
     const pct = s.mandTotal ? Math.round(s.mandDone / s.mandTotal * 100) : 0;
     const color = sub.color || getColor(i);
     return `<div class="subject-tab ${sub.id === activeSubjectId ? 'active' : ''}" onclick="setActive('${sub.id}')">
-      <div class="dot" style="background:${color}">${sub.icon || sub.name[0]}</div>
+      <div class="dot" style="background:${color}">${subjGlyph(sub)}</div>
       <div style="flex:1;min-width:0">
         <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.83rem">${esc(sub.name.replace(/PP\d+:\s*/,''))}</div>
         <div style="height:3px;background:#eee;border-radius:99px;margin-top:4px"><div style="height:100%;width:${pct}%;background:${color};border-radius:99px;transition:width .3s"></div></div>
@@ -1078,14 +1156,13 @@ function renderMain() {
 
   panel.innerHTML = `
     <div class="subject-header">
-      <div class="subject-icon" style="background:${color}">${sub.icon || sub.name[0]}</div>
-      <div>
+      <div class="subject-icon" style="background:${color}">${subjGlyph(sub)}</div>
+      <div style="flex:1;min-width:0">
         <div class="subject-name">${esc(sub.name)}</div>
         <div class="subject-code">${esc(sub.code || '')}</div>
       </div>
-      <div class="subject-pct-big" style="color:${color}">${pct}%</div>
+      ${progressRing(pct, color)}
     </div>
-    <div class="subject-bar"><div class="subject-bar-fill" style="width:${pct}%;background:${color}"></div></div>
     <div class="stats-row">
       <div class="stat-card total"><div class="val">${stats.mandTotal + stats.recTotal}</div><div class="lbl">Total Readings</div></div>
       <div class="stat-card mand"><div class="val">${stats.mandDone}/${stats.mandTotal}</div><div class="lbl">Mandatory Done</div></div>
@@ -1188,9 +1265,9 @@ function renderLUCard(lu, color) {
       </div>
     </div>
     <div class="lu-body">
-      ${lu.outcomes?.length ? `<div class="lu-outcomes"><strong>📎 Learning Outcomes</strong>${lu.outcomes.map((o,i) => `${i+1}. ${esc(o)}`).join(' &nbsp;·&nbsp; ')}</div>` : ''}
+      ${lu.outcomes?.length ? `<div class="lu-outcomes"><strong>Learning Outcomes</strong>${lu.outcomes.map((o,i) => `${i+1}. ${esc(o)}`).join(' &nbsp;·&nbsp; ')}</div>` : ''}
       <div class="readings-section">
-        <div class="readings-label mandatory">📌 Mandatory Readings <span class="badge">${s.mandDone}/${s.mandTotal}</span></div>
+        <div class="readings-label mandatory">Mandatory <span class="badge">${s.mandDone}/${s.mandTotal}</span></div>
         ${luReadings(lu, 'mandatory').map(r => readingItem(r)).join('')}
         <div style="margin-top:10px;display:flex;gap:8px">
           <input type="text" id="newMand_${lu.id}" placeholder="${isAdmin ? 'Add mandatory reading (official)…' : 'Suggest a reading to the group…'}" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','mandatory')">
@@ -1198,7 +1275,7 @@ function renderLUCard(lu, color) {
         </div>
       </div>
       <div class="readings-section">
-        <div class="readings-label recommended">⭐ Recommended Readings <span class="badge">${s.recDone}/${s.recTotal}</span></div>
+        <div class="readings-label recommended">Recommended <span class="badge">${s.recDone}/${s.recTotal}</span></div>
         ${luReadings(lu, 'recommended').map(r => readingItem(r)).join('')}
         <div style="margin-top:10px;display:flex;gap:8px">
           <input type="text" id="newRec_${lu.id}" placeholder="${isAdmin ? 'Add recommended reading (official)…' : 'Suggest a reading to the group…'}" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.8rem;outline:none" onkeydown="if(event.key==='Enter')addReading('${lu.id}','recommended')">
@@ -1228,7 +1305,7 @@ function readingItem(r) {
     ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:var(--faint)">added by ${avatarHTML(r.added_by, 17)} ${esc(nameOf(r.added_by))}${r.added_by === mine ? ` · <a onclick="removeSharedReading('${r.id}')" style="color:var(--brand-ink);cursor:pointer">remove</a>` : ''}</span>` : '';
   // comments
   const cmts = comments[r.id] || [];
-  const cmtToggle = `<a class="meta-link" onclick="toggleComments('${r.id}')">💬 ${cmts.length ? cmts.length : 'Discuss'}</a>`;
+  const cmtToggle = `<a class="meta-link" onclick="toggleComments('${r.id}')">${cmts.length ? 'Discuss · ' + cmts.length : 'Discuss'}</a>`;
   const thread = openComments[r.id] ? renderThread(r.id, cmts) : '';
   return `<div class="reading-item${checked ? ' checked' : ''}" id="ri_${r.id}">
     <input type="checkbox" id="cb_${r.id}" ${checked ? 'checked' : ''} onchange="toggleReading('${r.id}')">
