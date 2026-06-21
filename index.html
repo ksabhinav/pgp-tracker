@@ -723,6 +723,7 @@ async function onSession(session) {
     hideAuth();
     await loadCatalog();
     await loadSocial();                           // profiles, my completions, shared readings, comments
+    await migrateChecks();                        // carry over any old local checkmarks
     subscribeSocialRealtime();
     if (needsProfile()) openProfile();            // first login → pick an avatar
     if (isAdmin) {
@@ -782,6 +783,20 @@ async function loadSocial() {
     comments = {}; (co.data || []).forEach(c => (comments[c.reading_id] = comments[c.reading_id] || []).push(c));
     myProfile = profiles[currentUser.id] || null;
   } catch (e) { console.warn('social load failed', e); }
+}
+
+// One-time: lift this device's old local checkmarks into the completions table.
+async function migrateChecks() {
+  if (!sb || !currentUser) return;
+  if (Object.keys(userData.checked).length) return;     // already have completions
+  let old = {};
+  try { old = (JSON.parse(localStorage.getItem('pgp_progress')) || {}).checked || {}; } catch (e) {}
+  const ids = Object.keys(old).filter(k => old[k]);
+  if (!ids.length) return;
+  try {
+    await sb.from('completions').upsert(ids.map(id => ({ user_id: currentUser.id, reading_id: id })), { onConflict: 'user_id,reading_id' });
+    await loadSocial();
+  } catch (e) { console.warn('check migration failed', e); }
 }
 
 function subscribeSocialRealtime() {
