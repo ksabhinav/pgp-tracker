@@ -279,6 +279,32 @@
   .view-enter { animation: rise .26s var(--ease); }
 
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+  /* ════ avatars + hover name, declutter discuss ════ */
+  .av-img { background: transparent !important; overflow: hidden; }
+  .av-img img { border-radius: 50%; }
+  .av { position: relative; }
+  .av[data-name]::after {
+    content: attr(data-name); position: absolute; bottom: calc(100% + 7px); left: 50%;
+    transform: translateX(-50%) translateY(3px); background: var(--text); color: var(--bg);
+    font: 600 .68rem/1 'Hanken Grotesk', system-ui, sans-serif; padding: 4px 8px; border-radius: 7px;
+    white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .13s, transform .13s;
+    z-index: 50; box-shadow: var(--shadow-md);
+  }
+  .av[data-name]:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* discuss: only show when there's discussion; otherwise reveal on row hover */
+  .reading-meta-hover { opacity: 0; max-height: 0; margin-top: 0; overflow: hidden;
+    transition: opacity .15s, max-height .2s var(--ease), margin-top .15s; }
+  .reading-item:hover .reading-meta-hover { opacity: .7; max-height: 32px; margin-top: 7px; }
+
+  /* avatar picker */
+  .av-group-label { font-size: .64rem; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .07em; margin: 14px 0 8px; }
+  .av-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 9px; }
+  .av-pick { border: 2.5px solid transparent; border-radius: 50%; padding: 0; background: none; cursor: pointer; line-height: 0; transition: transform .13s var(--ease), border-color .13s; }
+  .av-pick img { width: 100%; border-radius: 50%; display: block; }
+  .av-pick:hover { transform: scale(1.14); }
+  .av-pick.sel { border-color: var(--brand); }
 </style>
 </head>
 <body>
@@ -400,9 +426,9 @@
     <h3>👋 Your profile</h3>
     <p style="font-size:.8rem;color:#666;margin-bottom:12px">This is how you'll appear to others — on readings you complete, readings you add, and in discussions.</p>
     <div id="profPreview" style="text-align:center;margin-bottom:14px"></div>
-    <input type="text" id="profName" placeholder="Display name" oninput="renderProfPicker()" />
-    <div style="font-size:.68rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:12px 0 8px">Pick a colour</div>
-    <div id="colorGrid" style="display:flex;flex-wrap:wrap;gap:9px"></div>
+    <input type="text" id="profName" placeholder="Display name" />
+    <div style="font-size:.68rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 2px">Choose an avatar</div>
+    <div id="avatarGrid" style="max-height:300px;overflow:auto;margin-right:-6px;padding-right:6px"></div>
     <div class="modal-actions" style="margin-top:18px">
       <button class="btn btn-primary" onclick="saveProfile()">Save profile</button>
     </div>
@@ -1001,36 +1027,42 @@ function initials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 function hashColor(uid) { let h = 0; const k = String(uid); for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) | 0; return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]; }
+function isAvatarId(x) { return x && /^[mwn]\d\d$/.test(x); }
 function avatarHTML(uid, size) {
   const p = profiles[uid] || {}; const s = size || 24;
-  const name = p.name || 'Member'; const color = p.color || hashColor(uid);
-  return `<span class="av" title="${esc(name)}" style="width:${s}px;height:${s}px;background:${color};font-size:${Math.round(s * 0.4)}px">${esc(initials(name))}</span>`;
+  const name = p.name || 'Member';
+  if (isAvatarId(p.emoji)) {
+    return `<span class="av av-img" data-name="${esc(name)}" aria-label="${esc(name)}" style="width:${s}px;height:${s}px"><img src="avatars/${p.emoji}.svg" alt="" loading="lazy" style="width:100%;height:100%;display:block"></span>`;
+  }
+  const color = p.color || hashColor(uid);
+  return `<span class="av" data-name="${esc(name)}" aria-label="${esc(name)}" style="width:${s}px;height:${s}px;background:${color};font-size:${Math.round(s * 0.4)}px">${esc(initials(name))}</span>`;
 }
 function nameOf(uid) { return (profiles[uid] && profiles[uid].name) || 'Member'; }
 
 // ---- profile setup ----
 function needsProfile() { return currentUser && !myProfile; }
-let selProfColor = '#620D3C';
+let selAvatar = 'n01';
 function openProfile() {
   const cur = myProfile || {};
   document.getElementById('profName').value = cur.name || (currentUser ? currentUser.email.split('@')[0] : '');
-  selProfColor = cur.color || hashColor(currentUser ? currentUser.id : 'x');
-  document.getElementById('colorGrid').innerHTML = AVATAR_COLORS.map(c =>
-    `<button onclick="selProfColor='${c}';renderProfPicker()" data-c="${c}" style="width:30px;height:30px;border-radius:50%;border:2.5px solid transparent;background:${c};cursor:pointer"></button>`).join('');
+  selAvatar = isAvatarId(cur.emoji) ? cur.emoji : 'n01';
+  document.getElementById('avatarGrid').innerHTML = [['Men', 'm', 15], ['Women', 'w', 15], ['Gender-neutral', 'n', 10]].map(([label, pfx, n]) =>
+    `<div class="av-group-label">${label}</div><div class="av-row">` +
+    Array.from({ length: n }, (_, i) => { const id = pfx + String(i + 1).padStart(2, '0');
+      return `<button class="av-pick" data-id="${id}" onclick="selAvatar='${id}';renderProfPicker()"><img src="avatars/${id}.svg" alt="" loading="lazy"></button>`; }).join('') + `</div>`).join('');
   renderProfPicker();
   document.getElementById('profileModal').classList.add('open');
 }
 function renderProfPicker() {
-  const name = document.getElementById('profName').value.trim() || 'Member';
-  document.getElementById('profPreview').innerHTML =
-    `<span class="av" style="width:62px;height:62px;background:${selProfColor};font-size:24px">${esc(initials(name))}</span>`;
-  document.querySelectorAll('#colorGrid button').forEach(b => b.style.borderColor = b.dataset.c === selProfColor ? 'var(--text)' : 'transparent');
+  document.getElementById('profPreview').innerHTML = `<img src="avatars/${selAvatar}.svg" alt="" style="width:78px;height:78px;border-radius:50%;box-shadow:var(--shadow-md)">`;
+  document.querySelectorAll('.av-pick').forEach(b => b.classList.toggle('sel', b.dataset.id === selAvatar));
 }
 async function saveProfile() {
   const name = document.getElementById('profName').value.trim() || (currentUser.email.split('@')[0]);
+  const color = (myProfile && myProfile.color) || hashColor(currentUser.id);
   try {
-    await sb.from('profiles').upsert({ user_id: currentUser.id, name, emoji: '', color: selProfColor, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-    myProfile = { user_id: currentUser.id, name, emoji: '', color: selProfColor };
+    await sb.from('profiles').upsert({ user_id: currentUser.id, name, emoji: selAvatar, color, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    myProfile = { user_id: currentUser.id, name, emoji: selAvatar, color };
     profiles[currentUser.id] = myProfile;
   } catch (e) { console.warn('profile save failed', e); }
   closeModal('profileModal');
@@ -1305,14 +1337,19 @@ function readingItem(r) {
     ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:var(--faint)">added by ${avatarHTML(r.added_by, 17)} ${esc(nameOf(r.added_by))}${r.added_by === mine ? ` · <a onclick="removeSharedReading('${r.id}')" style="color:var(--brand-ink);cursor:pointer">remove</a>` : ''}</span>` : '';
   // comments
   const cmts = comments[r.id] || [];
-  const cmtToggle = `<a class="meta-link" onclick="toggleComments('${r.id}')">${cmts.length ? 'Discuss · ' + cmts.length : 'Discuss'}</a>`;
+  const hasC = cmts.length > 0;
+  const cmtToggle = `<a class="meta-link" onclick="toggleComments('${r.id}')">${hasC ? 'Discuss · ' + cmts.length : 'Discuss'}</a>`;
   const thread = openComments[r.id] ? renderThread(r.id, cmts) : '';
+  const hasMeta = done.length || hasC || r.added_by || openComments[r.id];
+  const metaRow = hasMeta
+    ? `<div class="reading-meta">${completersHTML}${cmtToggle}${addedHTML}</div>`
+    : `<div class="reading-meta reading-meta-hover">${cmtToggle}</div>`;
   return `<div class="reading-item${checked ? ' checked' : ''}" id="ri_${r.id}">
     <input type="checkbox" id="cb_${r.id}" ${checked ? 'checked' : ''} onchange="toggleReading('${r.id}')">
     <div style="flex:1;min-width:0">
       ${nameHtml}
       ${r.desc ? `<span class="reading-desc" style="${checked ? 'color:var(--faint);' : ''}">${esc(r.desc)}</span>` : ''}
-      <div class="reading-meta">${completersHTML}${cmtToggle}${addedHTML}</div>
+      ${metaRow}
       ${thread}
     </div>
   </div>`;
