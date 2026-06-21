@@ -45,10 +45,34 @@ create policy "own progress" on public.progress
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+-- ── Auto-sync inbox (the userscript drops scraped LUs here) ───────────────────
+create table if not exists public.inbox (
+  id         bigint generated always as identity primary key,
+  payload    jsonb not null,
+  created_at timestamptz not null default now()
+);
+alter table public.inbox enable row level security;
+
+-- the browser userscript (anon) may drop an LU into the inbox
+drop policy if exists "inbox insert" on public.inbox;
+create policy "inbox insert" on public.inbox
+  for insert with check (true);
+
+-- only the admin app can read and clear the inbox (it merges rows into the catalog)
+drop policy if exists "inbox admin read" on public.inbox;
+create policy "inbox admin read" on public.inbox
+  for select using ((auth.jwt() ->> 'email') = 'ksabhinav20@gmail.com');
+drop policy if exists "inbox admin delete" on public.inbox;
+create policy "inbox admin delete" on public.inbox
+  for delete using ((auth.jwt() ->> 'email') = 'ksabhinav20@gmail.com');
+
 -- ── Realtime (live sync across devices) ──────────────────────────────────────
 do $$ begin
   alter publication supabase_realtime add table public.catalog;
 exception when duplicate_object then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table public.progress;
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.inbox;
 exception when duplicate_object then null; end $$;

@@ -486,7 +486,7 @@ let sb = null;            // supabase client
 let currentUser = null;   // signed-in user (null = anonymous, local-only)
 let isAdmin = false;      // currentUser.email === ADMIN_EMAIL
 let catPushTimer = null, progPushTimer = null;
-let catChannel = null, progChannel = null;
+let catChannel = null, progChannel = null, inboxChannel = null;
 const CFG = window.PGP_CONFIG || {};
 const isConfigured = () => CFG.url && CFG.anonKey && !/YOUR_/.test(CFG.url) && !/YOUR_/.test(CFG.anonKey);
 
@@ -572,6 +572,71 @@ function subscribeProgressRealtime() {
     }).subscribe();
 }
 
+// ---- auto-sync inbox (admin only): drain scraped LUs from the userscript ----
+// Merge one incoming scraped LU into the catalog: prefer an existing LU (by title,
+// so the outline-import shells get backfilled with readings+links), else place it
+// under its subject hint (created if needed), else an "Unsorted" subject.
+function applyIncomingLU(lu) {
+  for (const sub of catalog.subjects) {
+    const ex = sub.lus.find(l => norm(l.title) === norm(lu.title));
+    if (ex) {
+      mergeReadings(ex, 'mandatory', lu.mandatory);
+      mergeReadings(ex, 'recommended', lu.recommended);
+      if (lu.url) ex.url = lu.url;
+      if ((lu.outcomes || []).length && !(ex.outcomes || []).length) ex.outcomes = lu.outcomes;
+      if (typeof lu.selfStudy === 'boolean') ex.selfStudy = lu.selfStudy;
+      return true;
+    }
+  }
+  let sub = null;
+  if (lu.subjectHint) {
+    sub = catalog.subjects.find(s => norm(s.name) === norm(lu.subjectHint));
+    if (!sub) {
+      sub = { id: 'sub_' + (slugify(lu.subjectHint) || uid()), name: lu.subjectHint, code: '', color: getColor(catalog.subjects.length), icon: '📘', lus: [] };
+      while (catalog.subjects.some(s => s.id === sub.id)) sub.id += '_' + uid().slice(0, 3);
+      catalog.subjects.push(sub);
+    }
+  }
+  if (!sub) {
+    sub = catalog.subjects.find(s => s.id === 'sub_unsorted');
+    if (!sub) { sub = { id: 'sub_unsorted', name: 'Unsorted', code: '', color: getColor(catalog.subjects.length), icon: '📥', lus: [] }; catalog.subjects.push(sub); }
+  }
+  let luId = sub.id + '_' + (lu.id || uid());
+  const taken = allLuIds();
+  while (taken.has(luId)) luId += '_' + uid().slice(0, 3);
+  const ensureIds = arr => (arr || []).map(r => ({ ...r, id: r.id || uid(), url: r.url || '' }));
+  sub.lus.push({ id: luId, title: lu.title, selfStudy: !!lu.selfStudy, url: lu.url || '', outcomes: lu.outcomes || [], mandatory: ensureIds(lu.mandatory), recommended: ensureIds(lu.recommended) });
+  return true;
+}
+
+async function drainInbox() {
+  if (!sb || !isAdmin) return;
+  let rows;
+  try {
+    const { data, error } = await sb.from('inbox').select('id,payload').order('id');
+    if (error) throw error;
+    rows = data || [];
+  } catch (e) { console.warn('inbox read failed', e); return; }
+  if (!rows.length) return;
+  let merged = 0; const ids = [];
+  rows.forEach(row => {
+    ids.push(row.id);
+    const lu = row.payload;
+    if (lu && lu.title && /opentakshashila\.net/i.test(lu.url || '')) {   // basic validation
+      try { if (applyIncomingLU(lu)) merged++; } catch (e) { console.warn('merge failed', e); }
+    }
+  });
+  try { await sb.from('inbox').delete().in('id', ids); } catch (e) { console.warn('inbox clear failed', e); }
+  if (merged) { saveCatalog(); renderAll(); setSync('✓ Auto-synced ' + merged + ' LU' + (merged > 1 ? 's' : ''), 'ok'); setTimeout(() => setSync(''), 2500); }
+}
+
+function subscribeInboxRealtime() {
+  if (!sb || !isAdmin || inboxChannel) return;
+  inboxChannel = sb.channel('inbox-rt')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'inbox' }, () => { drainInbox(); })
+    .subscribe();
+}
+
 // ---- account UI / roles ----
 function renderAcct() {
   const el = document.getElementById('acctArea');
@@ -632,9 +697,11 @@ async function onSession(session) {
     await loadCatalog();
     await loadProgress();
     subscribeProgressRealtime();
+    if (isAdmin) { subscribeInboxRealtime(); await drainInbox(); }   // pull anything the userscript queued
     renderAll();
   } else {
     if (progChannel) { try { sb.removeChannel(progChannel); } catch (e) {} progChannel = null; }
+    if (inboxChannel) { try { sb.removeChannel(inboxChannel); } catch (e) {} inboxChannel = null; }
     userData = loadLocalProgress();
     renderAll();
   }
@@ -653,7 +720,10 @@ async function boot() {
   // Fallback for any realtime gaps: refetch when the tab regains focus.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && sb) {
-      loadCatalog().then(() => currentUser ? loadProgress() : null).then(renderAll);
+      loadCatalog()
+        .then(() => currentUser ? loadProgress() : null)
+        .then(() => isAdmin ? drainInbox() : null)
+        .then(renderAll);
     }
   });
 }
