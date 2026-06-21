@@ -15,7 +15,9 @@ per-member progress** that syncs across devices in realtime.
   Logging in (magic link) syncs your progress across all your devices in realtime.
 
 ## Collaborative features (signed-in members)
-- **Profiles & avatars** — pick an emoji + colour on first sign-in; it shows everywhere you appear.
+- **Profiles & avatars** — pick a colour on first sign-in; a clean monogram (your initials) shows everywhere you appear.
+- **Activity feed, People directory, and full-text search** across all readings.
+- **Dark mode** (follows your device, with a manual toggle) and a refined, minimal Inter-based UI.
 - **Completion indicators** — each reading shows avatars of everyone who's finished it, so you can find people to discuss with.
 - **Comments** — a discussion thread on every reading.
 - **Shared readings** — anyone can add a reading to the group; it shows "added by <name>".
