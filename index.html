@@ -918,15 +918,46 @@ function previewImport() {
   } catch(e) {}
 }
 
+// Fill in url/desc on existing readings (matched by name) and append any new ones.
+function mergeReadings(lu, type, incoming) {
+  lu[type] = lu[type] || [];
+  (incoming || []).forEach(inc => {
+    const match = lu[type].find(r => norm(r.name) === norm(inc.name));
+    if (match) {
+      if (inc.url && !match.url) match.url = inc.url;
+      if (inc.desc && !match.desc) match.desc = inc.desc;
+    } else {
+      lu[type].push({ id: uid(), name: inc.name, desc: inc.desc || '', url: inc.url || '' });
+    }
+  });
+}
+
 function confirmImport() {
   if (!importParsed || !importSubjectId) return;
   const sub = catalog.subjects.find(s => s.id === importSubjectId);
   if (!sub) return;
   const lu = importParsed;
-  // avoid duplicate
-  if (sub.lus.find(l => norm(l.title) === norm(lu.title))) {
-    if (!confirm('An LU with this title already exists. Add anyway?')) return;
+
+  // If this LU already exists, MERGE: backfill links onto existing readings
+  // (this is how the seed readings get their URLs) and add any new ones.
+  const existing = sub.lus.find(l => norm(l.title) === norm(lu.title));
+  if (existing) {
+    if (!confirm('This LU already exists. Update it — add links to its readings and any new readings?')) return;
+    mergeReadings(existing, 'mandatory', lu.mandatory);
+    mergeReadings(existing, 'recommended', lu.recommended);
+    if (lu.url) existing.url = lu.url;
+    if ((lu.outcomes || []).length && !(existing.outcomes || []).length) existing.outcomes = lu.outcomes;
+    if (typeof lu.selfStudy === 'boolean') existing.selfStudy = lu.selfStudy;
+    saveCatalog();
+    closeModal('importModal');
+    renderAll();
+    setTimeout(() => {
+      const card = document.getElementById('lu_' + existing.id);
+      if (card) { card.classList.add('open'); userData.openLUs[existing.id] = true; card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }, 100);
+    return;
   }
+
   let luId = sub.id + '_' + (lu.id || uid());
   const taken = allLuIds();
   while (taken.has(luId)) luId += '_' + uid().slice(0, 3);
