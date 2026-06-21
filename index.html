@@ -53,11 +53,16 @@
   header { background: var(--header-bg); color: var(--header-text); padding: 16px 24px; padding-top: calc(16px + env(safe-area-inset-top)); display: flex; align-items: center; justify-content: space-between; gap: 16px; position: sticky; top: 0; z-index: 100; }
   header h1 { font-size: 1.12rem; font-weight: 700; letter-spacing: -.02em; display: flex; align-items: center; gap: 8px; }
   header .subtitle { font-size: .76rem; color: var(--header-soft); margin-top: 2px; }
-  .global-bar-wrap { min-width: 200px; text-align: right; }
-  .global-pct { font-size: 1.35rem; font-weight: 800; color: #F1A222; letter-spacing: -.02em; }
-  .global-label { font-size: .68rem; color: var(--header-soft); }
-  .bar { height: 6px; background: rgba(255,255,255,.16); border-radius: 99px; margin-top: 6px; overflow: hidden; }
-  .bar-fill { height: 100%; background: #F1A222; border-radius: 99px; transition: width .5s cubic-bezier(.2,.7,.2,1); }
+  .hdr-brand { min-width: 0; flex: 1; }
+  .hdr-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; flex-shrink: 0; }
+  #acctArea { font-size: .74rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .overall { display: flex; align-items: center; gap: 9px; }
+  .global-pct { font-size: 1.05rem; font-weight: 800; color: #F1A222; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .global-label { font-size: .7rem; color: var(--header-soft); }
+  .overall .bar { width: 104px; }
+  .bar { height: 6px; background: rgba(255,255,255,.16); border-radius: 99px; overflow: hidden; display: inline-block; }
+  .bar-fill { height: 100%; background: #F1A222; border-radius: 99px; transition: width .5s cubic-bezier(.2,.7,.2,1); display: block; }
+  #syncStatus { font-size: .66rem; color: var(--header-soft); height: 1em; text-align: right; }
   .icon-btn { background: rgba(255,255,255,.12); color: var(--header-text); border: none; width: 32px; height: 32px; border-radius: 9px; font-size: .95rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background .15s; }
   .icon-btn:hover { background: rgba(255,255,255,.22); }
 
@@ -91,7 +96,9 @@
   .subject-pct-big { margin-left: auto; font-size: 1.9rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
   .subject-bar { height: 8px; background: var(--border); border-radius: 99px; margin-bottom: 22px; overflow: hidden; }
   .subject-bar-fill { height: 100%; border-radius: 99px; transition: width .5s cubic-bezier(.2,.7,.2,1); }
-  .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 11px; margin-bottom: 24px; }
+  .stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 11px; margin-bottom: 24px; }
+  .zero-banner { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 15px 18px; margin-bottom: 22px; font-size: .92rem; color: var(--muted); box-shadow: var(--shadow-sm); }
+  .zero-banner b { color: var(--text); font-weight: 700; }
   .stat-card { background: var(--surface); border-radius: var(--r); padding: 15px 16px; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
   .stat-card .val { font-size: 1.5rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
   .stat-card .lbl { font-size: .66rem; color: var(--faint); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-top: 3px; }
@@ -129,9 +136,11 @@
   .reading-item:last-child { border-bottom: none; }
   .reading-item input[type=checkbox] { margin-top: 2px; flex-shrink: 0; width: 18px; height: 18px; accent-color: var(--brand); cursor: pointer; }
   .reading-name { font-weight: 600; color: var(--text); font-size: .88rem; line-height: 1.4; }
-  a.reading-name { color: var(--link); text-decoration: none; }
-  a.reading-name:hover { text-decoration: underline; }
-  .reading-desc { color: var(--muted); font-size: .79rem; display: block; margin-top: 2px; line-height: 1.45; }
+  a.reading-name { color: var(--text); text-decoration: none; transition: color .12s; }
+  a.reading-name:hover { color: var(--brand-ink); }
+  .ext { font-size: .68em; color: var(--faint); margin-left: 4px; vertical-align: 1px; transition: color .12s; }
+  a.reading-name:hover .ext { color: var(--brand-ink); }
+  .reading-desc { color: var(--muted); font-size: .76rem; display: block; margin-top: 2px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .reading-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 7px; }
   .reading-meta .meta-link { font-size: .72rem; color: var(--brand-ink); cursor: pointer; font-weight: 600; }
   .avstack { display: inline-flex; align-items: center; }
@@ -195,9 +204,10 @@
   @media (max-width: 820px) {
     header { flex-wrap: wrap; padding: 12px 16px; padding-top: calc(12px + env(safe-area-inset-top)); }
     header h1 { font-size: 1.02rem; }
-    .global-bar-wrap { order: 3; min-width: 0; width: 100%; text-align: left; display:flex; align-items:center; gap:10px; }
-    .global-bar-wrap .bar { flex:1; margin-top:0; max-width: 260px; }
-    .global-pct { font-size: 1.1rem; }
+    .hdr-meta { width: 100%; align-items: stretch; }
+    #acctArea { justify-content: flex-start; }
+    .overall { justify-content: flex-start; }
+    .overall .bar { flex: 1; width: auto; max-width: 220px; }
     .layout { flex-direction: column; }
     .sidebar { width: 100%; min-width: 0; position: static; padding: 12px 14px 4px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
     .search-box { grid-column: 1 / -1; margin-bottom: 4px; }
@@ -207,7 +217,7 @@
     .subject-tab { border: 1px solid var(--border); flex: 1 1 calc(50% - 6px); }
     .add-subject, #setupSection { grid-column: 1 / -1; }
     .main { padding: 14px 14px calc(40px + env(safe-area-inset-bottom)); }
-    .stats-row { grid-template-columns: 1fr 1fr; }
+    .stats-row { grid-template-columns: repeat(3, 1fr); }
     .subject-pct-big { font-size: 1.6rem; }
     .reading-item input[type=checkbox] { width: 20px; height: 20px; }
     .modal { width: 96vw; }
@@ -244,7 +254,7 @@
   .lu-card:hover .lu-num { transform: scale(1.06) rotate(-3deg); }
 
   /* reading rows: hover highlight + reveal meta */
-  .reading-item { border-bottom: 1px solid var(--hair); border-radius: 10px; margin: 0 -10px; padding: 10px; transition: background .14s; }
+  .reading-item { border-bottom: 1px solid var(--hair); border-radius: 10px; margin: 0 -10px; padding: 8px 10px; transition: background .14s; }
   .reading-item:last-child { border-bottom: 0; }
   .reading-item:hover { background: var(--surface-2); }
   .reading-meta { opacity: .72; transition: opacity .15s; }
@@ -322,16 +332,18 @@
 </head>
 <body>
 <header>
-  <div style="min-width:0;flex:1">
+  <div class="hdr-brand">
     <h1><img src="icons/favicon-32.png" class="brand-mark" alt="">PGP Reading Tracker</h1>
     <div class="subtitle">Post Graduate Programme in Public Policy</div>
-    <div id="acctArea" style="margin-top:7px;font-size:.74rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
   </div>
-  <div class="global-bar-wrap">
-    <div class="global-pct" id="globalPct">0%</div>
-    <div class="global-label">Overall mandatory readings done</div>
-    <div class="bar"><div class="bar-fill" id="globalBar" style="width:0%"></div></div>
-    <div id="syncStatus" style="font-size:.66rem;color:var(--header-soft);margin-top:5px;height:1em"></div>
+  <div class="hdr-meta">
+    <div id="acctArea"></div>
+    <div class="overall" title="Overall mandatory readings done">
+      <span class="global-label">Overall</span>
+      <span class="bar"><span class="bar-fill" id="globalBar" style="width:0%"></span></span>
+      <span class="global-pct" id="globalPct">0%</span>
+    </div>
+    <div id="syncStatus"></div>
   </div>
 </header>
 
@@ -1233,12 +1245,13 @@ function renderMain() {
       </div>
       ${progressRing(pct, color)}
     </div>
-    <div class="stats-row">
-      <div class="stat-card total"><div class="val">${stats.mandTotal + stats.recTotal}</div><div class="lbl">Total Readings</div></div>
-      <div class="stat-card mand"><div class="val">${stats.mandDone}/${stats.mandTotal}</div><div class="lbl">Mandatory Done</div></div>
-      <div class="stat-card rec"><div class="val">${stats.recDone}/${stats.recTotal}</div><div class="lbl">Recommended Done</div></div>
-      <div class="stat-card done"><div class="val">${pct}%</div><div class="lbl">Progress</div></div>
-    </div>
+    ${(stats.mandDone === 0 && stats.recDone === 0)
+      ? `<div class="zero-banner"><b>${stats.mandTotal + stats.recTotal} readings</b> across ${sub.lus.length} learning unit${sub.lus.length === 1 ? '' : 's'} — start anywhere below.</div>`
+      : `<div class="stats-row">
+      <div class="stat-card total"><div class="val">${stats.mandTotal + stats.recTotal}</div><div class="lbl">Readings</div></div>
+      <div class="stat-card mand"><div class="val">${stats.mandDone}/${stats.mandTotal}</div><div class="lbl">Mandatory</div></div>
+      <div class="stat-card rec"><div class="val">${stats.recDone}/${stats.recTotal}</div><div class="lbl">Recommended</div></div>
+    </div>`}
     ${sub.lus.map(lu => renderLUCard(lu, color)).join('')}
     ${isAdmin ? `<div style="display:flex;gap:10px;margin-bottom:16px">
       <button class="add-lu-btn" style="margin-bottom:0" onclick="openAddLU('${sub.id}')">+ Add Learning Unit</button>
@@ -1373,8 +1386,9 @@ function readingItem(r, luUrl) {
   const strike = checked ? 'text-decoration:line-through;color:#999;' : '';
   const link = r.url || luUrl || '';
   const isFallback = !r.url && !!luUrl;   // no direct link → open the OpenTakshashila lesson page
+  const ttl = isFallback ? 'Read on OpenTakshashila' : (r.url ? 'Open the source' : '');
   const nameHtml = link
-    ? `<a href="${esc(link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="reading-name" style="text-decoration:none;${strike}">${esc(r.name)} <span style="font-size:.72em;color:var(--faint)">${isFallback ? 'read on OT ↗' : '↗'}</span></a>`
+    ? `<a href="${esc(link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="reading-name" title="${ttl}" style="${strike}">${esc(r.name)}<span class="ext">↗</span></a>`
     : `<span class="reading-name" onclick="document.getElementById('cb_${r.id}').click()" style="cursor:pointer;${strike}">${esc(r.name)}</span>`;
   // who has completed this reading
   const done = completers[r.id] || [];
@@ -1399,7 +1413,7 @@ function readingItem(r, luUrl) {
     <input type="checkbox" id="cb_${r.id}" ${checked ? 'checked' : ''} onchange="toggleReading('${r.id}')">
     <div style="flex:1;min-width:0">
       ${nameHtml}
-      ${r.desc ? `<span class="reading-desc" style="${checked ? 'color:var(--faint);' : ''}">${esc(r.desc)}</span>` : ''}
+      ${r.desc ? `<span class="reading-desc" title="${esc(r.desc)}"${checked ? ' style="color:var(--faint)"' : ''}>${esc(r.desc)}</span>` : ''}
       ${metaRow}
       ${thread}
     </div>
