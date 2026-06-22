@@ -1784,9 +1784,11 @@ function readingItem(r, luUrl) {
   const thread = openComments[r.id] ? renderThread(r.id, cmts) : '';
   // admin: turn a (non-readable) reading into a reflowed PDF in the reader
   const pdfBtn = (isAdmin && !rmode) ? `<label class="meta-link pdf-make" title="Attach a PDF to open this reading in the in-app reader">make readable<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="onAdminPdf('${r.id}', this)"></label>` : '';
-  const hasMeta = done.length || hasC || r.added_by || openComments[r.id] || pdfBtn;
+  // admin: re-run extraction on an existing PDF reading (picks up extractor/parser improvements)
+  const reExtractBtn = (isAdmin && rmode && rmode.rc && rmode.rc.kind === 'pdf') ? `<a class="meta-link" onclick="reExtractPdf('${r.id}')" title="Re-run PDF extraction">re-extract</a>` : '';
+  const hasMeta = done.length || hasC || r.added_by || openComments[r.id] || pdfBtn || reExtractBtn;
   const metaRow = hasMeta
-    ? `<div class="reading-meta">${completersHTML}${cmtToggle}${pdfBtn}${addedHTML}</div>`
+    ? `<div class="reading-meta">${completersHTML}${cmtToggle}${pdfBtn}${reExtractBtn}${addedHTML}</div>`
     : `<div class="reading-meta reading-meta-hover">${cmtToggle}</div>`;
   return `<div class="reading-item${checked ? ' checked' : ''}" id="ri_${r.id}">
     <input type="checkbox" id="cb_${r.id}" ${checked ? 'checked' : ''} onchange="toggleReading('${r.id}')">
@@ -2380,11 +2382,32 @@ async function extractPdf(arrayBuffer) {
   // Build HTML and the page map together so char offsets line up with container.textContent.
   let html = '', text = '', pageMap = [];
   for (const { page, paras } of perPage) {
-    const pageText = paras.join(''); const start = text.length; text += pageText;
+    const clean = paras.filter(t => !/^\d{1,3}$/.test(t.trim()));   // drop standalone page-number lines
+    const pageText = clean.join(''); const start = text.length; text += pageText;
     pageMap.push({ page, start, end: text.length });
-    html += `<section data-page="${page}">` + paras.map(t => `<p>${_pdfEsc(t)}</p>`).join('') + `</section>`;
+    html += `<section data-page="${page}">` + clean.map(t => `<p>${_pdfEsc(t)}</p>`).join('') + `</section>`;
   }
   return { route, kind: 'pdf', html, text, pageMap, flags: { scannedPages: scanned, twoColumnPages: twoColish, totalPages: total } };
+}
+// Admin: re-run extraction on a PDF reading already in the library (fetches the stored
+// original — no re-upload), to pick up extractor improvements or a deployed parser.
+async function reExtractPdf(rId) {
+  const r = readingObjs[rId]; const rc = r && contentFor(r);
+  if (!rc || rc.kind !== 'pdf' || !rc.source_file) return;
+  if (!isAdmin || !sb) return;
+  setSync('Re-reading PDF…');
+  try {
+    const buf = await (await fetch(rc.source_file)).arrayBuffer();
+    const res = await extractPdf(buf);
+    if (res.route !== 'reflow') {
+      try { await sb.functions.invoke('extract-pdf', { body: { path: '', url: rc.url, reading_id: r.id, title: rc.title || r.name, route: res.route } }); setSync('PDF queued for ' + (res.route === 'ocr' ? 'OCR' : 'parsing'), 'ok'); } catch (e) { setSync('⚠ Needs server extractor', 'err'); }
+      setTimeout(() => setSync(''), 2500); return;
+    }
+    const { error } = await sb.from('reading_content').upsert({ url: rc.url, reading_id: r.id, title: rc.title || r.name, kind: 'pdf', content_html: res.html, page_map: res.pageMap, source_file: rc.source_file, extracted_by: 'pdfjs', needs_review: false, captured_by: currentUser.id }, { onConflict: 'url' });
+    if (error) throw error;
+    setSync('✓ Re-extracted', 'ok'); setTimeout(() => setSync(''), 2000);
+    await loadSocial(); renderMain();
+  } catch (e) { console.warn('re-extract failed', e); setSync('⚠ Re-extract failed', 'err'); setTimeout(() => setSync(''), 2500); }
 }
 // Admin: turn a PDF file into reflowed reader content for a reading.
 async function addPdfReading(reading, file) {
