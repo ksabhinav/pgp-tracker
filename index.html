@@ -340,6 +340,9 @@
   .test-tag { display: inline-block; font-size: .58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gold); background: var(--gold-soft); padding: 1px 6px; border-radius: 99px; margin-left: 5px; vertical-align: middle; }
   .pf-toggle { display: flex; align-items: center; gap: 9px; font-size: .85rem; color: var(--text); margin: 7px 0; cursor: pointer; }
   .pf-toggle input { width: 17px; height: 17px; accent-color: var(--brand); cursor: pointer; flex-shrink: 0; }
+  .person-hero { display: flex; align-items: center; gap: 16px; margin: 12px 0 2px; }
+  .person-hero-name { font-family: var(--display); font-weight: 800; font-size: 1.5rem; letter-spacing: -.02em; line-height: 1.15; }
+  .person-hero-sub { font-size: .82rem; color: var(--muted); margin: 4px 0 3px; }
 
   /* ── READER + HIGHLIGHTS ─────────────────────────────────────────── */
   .reader-link { cursor: pointer; }
@@ -561,14 +564,6 @@
     <div class="modal-actions" style="margin-top:18px">
       <button class="btn btn-primary" onclick="saveProfile()">Save profile</button>
     </div>
-  </div>
-</div>
-
-<!-- Member activity timeline -->
-<div class="modal-bg" id="personModal">
-  <div class="modal" style="width:480px;max-height:82vh">
-    <div id="personModalBody"></div>
-    <div class="modal-actions" style="margin-top:14px"><button class="btn" onclick="closeModal('personModal')">Close</button></div>
   </div>
 </div>
 
@@ -801,7 +796,7 @@ function saveProgress() { saveProgressLocal(); }   // openLUs UI state; completi
 document.documentElement.setAttribute('data-theme', 'light');
 
 // ── VIEWS / NAVIGATION ────────────────────────────────────────────────────────
-let currentView = 'readings', searchQuery = '';
+let currentView = 'readings', searchQuery = '', currentPersonId = null;
 let activityItems = [], allActivity = [], readingIndex = {};
 let pvNoComp = new Set(), pvNoHL = new Set(), pvNoCmt = new Set();   // members who opted out of sharing each
 function setView(v) {
@@ -1441,6 +1436,7 @@ function renderMain() {
   if (currentView === 'activity') return renderActivity(panel);
   if (currentView === 'people') return renderPeople(panel);
   if (currentView === 'highlights') return renderHighlights(panel);
+  if (currentView === 'person') return renderPerson(panel);
   if (!activeSubjectId) { panel.innerHTML = '<div class="empty"><h2>Select a subject</h2></div>'; return; }
   const subIdx = catalog.subjects.findIndex(s => s.id === activeSubjectId);
   const sub = catalog.subjects[subIdx];
@@ -1512,7 +1508,7 @@ function renderPeople(panel) {
   // include everyone with a (non-hidden) profile, even 0 completions
   Object.keys(profiles).forEach(u => { if (profiles[u].hidden) return; if (!(u in counts)) counts[u] = 0; });
   const people = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
-  const cards = people.map(u => `<div class="person-card" onclick="openPersonTimeline('${u}')" style="cursor:pointer" title="See ${esc(nameOf(u))}'s activity">
+  const cards = people.map(u => `<div class="person-card" onclick="goToPerson('${u}')" style="cursor:pointer" title="Open ${esc(nameOf(u))}'s profile">
       ${avatarHTML(u, 42)}
       <div style="min-width:0">
         <div style="font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(nameOf(u))}${u === currentUser.id ? ' <span style="color:var(--faint);font-weight:500">(you)</span>' : ''}${testTag(u)}</div>
@@ -1522,26 +1518,46 @@ function renderPeople(panel) {
   panel.innerHTML = `<div class="panel-title">People</div><div class="panel-sub">${people.length} member${people.length === 1 ? '' : 's'} in the cohort. Tap anyone to see their activity.</div><div class="people-grid">${cards || '<div class="empty"><p>No one has signed in yet.</p></div>'}</div>`;
 }
 
-// A single member's timeline (what they've shared: completions, highlights, comments).
-function openPersonTimeline(uid) {
+// Open a member's full profile page (a proper view, not a popup).
+function goToPerson(uid) {
+  currentPersonId = uid; currentView = 'person'; searchQuery = '';
+  const si = document.getElementById('searchInput'); if (si) si.value = '';
+  ['readings', 'activity', 'people', 'highlights'].forEach(n => { const el = document.getElementById('nav-' + n); if (el) el.classList.toggle('active', n === 'people'); });
+  renderMain();
+  const mp = document.getElementById('mainPanel'); if (mp) { mp.classList.remove('view-enter'); void mp.offsetWidth; mp.classList.add('view-enter'); }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function renderPerson(panel) {
+  const uid = currentPersonId;
+  if (!uid || !profiles[uid]) { panel.innerHTML = `<a class="meta-link" onclick="setView('people')" style="cursor:pointer;font-size:.82rem">← People</a><div class="empty"><h2>Member not found</h2></div>`; return; }
+  const isMe = uid === (currentUser && currentUser.id);
   const items = allActivity.filter(a => a.user_id === uid && a.at).sort((a, b) => new Date(b.at) - new Date(a.at));
+  const done = items.filter(a => a.kind === 'done').length;
+  const hl = items.filter(a => a.kind === 'highlight').length;
+  const cmt = items.filter(a => a.kind === 'comment').length;
   let lastDay = ''; const parts = [];
   items.forEach(a => {
     const ri = readingIndex[a.reading_id]; if (!ri) return;
     const dl = dayLabel(a.at);
     if (dl !== lastDay) { lastDay = dl; parts.push(`<div class="day-break">${dl}</div>`); }
-    const where = `<a class="meta-link" onclick="closeModal('personModal');goToReading('${a.reading_id}')">${esc(ri.name)}</a>`;
+    const where = `<a class="meta-link" onclick="goToReading('${a.reading_id}')">${esc(ri.name)}</a>`;
     const line = a.kind === 'done' ? `completed ${where}`
-      : a.kind === 'highlight' ? `highlighted in ${where}<div style="color:var(--muted);margin-top:2px">“${esc((a.quote || '').slice(0, 160))}”</div>`
-      : `commented on ${where}<div style="color:var(--muted);margin-top:2px">“${esc(a.body)}”</div>`;
-    parts.push(`<div style="padding:8px 0;border-bottom:1px solid var(--hair)"><div style="font-size:.86rem">${line}</div><div style="font-size:.72rem;color:var(--faint);margin-top:3px">${esc(ri.subject)} · ${(ri.lu || '').replace(/:.*/, '')} · ${timeAgo(a.at)}</div></div>`);
+      : a.kind === 'highlight' ? `highlighted in ${where}<div style="color:var(--muted);margin-top:3px">“${esc((a.quote || '').slice(0, 160))}”</div>`
+      : `commented on ${where}<div style="color:var(--muted);margin-top:3px">“${esc(a.body)}”</div>`;
+    parts.push(`<div class="feed-item">${avatarHTML(uid, 28)}<div style="flex:1;min-width:0"><div class="feed-body">${line}</div><div class="feed-time">${esc(ri.subject)} · ${(ri.lu || '').replace(/:.*/, '')} · ${timeAgo(a.at)}</div></div></div>`);
   });
-  document.getElementById('personModalBody').innerHTML =
-    `<div style="display:flex;align-items:center;gap:11px;margin-bottom:12px">${avatarHTML(uid, 44)}
-      <div style="min-width:0"><div style="font-weight:750;font-size:1.05rem">${esc(nameOf(uid))}${uid === (currentUser && currentUser.id) ? ' <span style="color:var(--faint);font-weight:500;font-size:.8rem">(you)</span>' : ''}${testTag(uid)}</div>
-      <div style="font-size:.76rem;color:var(--muted)">${items.length} shared activit${items.length === 1 ? 'y' : 'ies'}</div></div></div>
-    ${parts.length ? parts.join('') : '<div class="empty" style="padding:20px 0"><p>Nothing shared yet.</p></div>'}`;
-  document.getElementById('personModal').classList.add('open');
+  panel.innerHTML = `
+    <a class="meta-link" onclick="setView('people')" style="cursor:pointer;font-size:.82rem">← People</a>
+    <div class="person-hero">
+      ${avatarHTML(uid, 76)}
+      <div style="min-width:0;flex:1">
+        <div class="person-hero-name">${esc(nameOf(uid))}${isMe ? ' <span style="color:var(--faint);font-weight:500;font-size:.8rem">(you)</span>' : ''}${testTag(uid)}</div>
+        <div class="person-hero-sub">${done} completed · ${hl} highlight${hl === 1 ? '' : 's'} · ${cmt} comment${cmt === 1 ? '' : 's'}</div>
+        ${isMe ? '<a onclick="openProfile()" style="cursor:pointer;color:var(--brand-ink);font-size:.8rem;font-weight:600">Edit profile</a>' : ''}
+      </div>
+    </div>
+    <div class="panel-sub" style="margin:14px 0 2px">Activity</div>
+    ${parts.length ? parts.join('') : '<div class="empty"><p>Nothing shared yet.</p></div>'}`;
 }
 
 // ── My Highlights view ────────────────────────────────────────────────────────
