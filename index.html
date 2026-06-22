@@ -385,6 +385,13 @@
   .reader-body mark.hl.mine { background: var(--hl-fill, rgba(255,214,107,.5)); }
   .reader-body mark.hl.theirs { background: transparent; border-bottom: 2px solid var(--hl-line, #888); }
   .reader-body mark.hl.both { background: var(--hl-fill, rgba(255,214,107,.5)); border-bottom: 2px solid var(--hl-line, #888); }
+  /* native text selection inside the reader — themed so it stays visible (esp. dark) and distinct from highlight fills */
+  .reader-overlay ::selection { background: #620D3C; color: #fff; }
+  .reader-overlay ::-moz-selection { background: #620D3C; color: #fff; }
+  .reader-overlay.theme-sepia ::selection { background: #7a1146; color: #fff; }
+  .reader-overlay.theme-sepia ::-moz-selection { background: #7a1146; color: #fff; }
+  .reader-overlay.theme-dark ::selection { background: #F1A222; color: #1c1b19; }
+  .reader-overlay.theme-dark ::-moz-selection { background: #F1A222; color: #1c1b19; }
 
   /* selection mini-toolbar */
   .hl-tools { position: fixed; z-index: 320; transform: translate(-50%, -120%); background: #1c1b19; border-radius: 11px; padding: 7px 9px; display: none; align-items: center; gap: 7px; box-shadow: 0 8px 26px rgba(0,0,0,.4); }
