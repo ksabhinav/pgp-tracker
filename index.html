@@ -269,7 +269,7 @@
   .reading-item:hover { background: var(--surface-2); }
   .reading-meta { opacity: .72; transition: opacity .15s; }
   .reading-item:hover .reading-meta { opacity: 1; }
-  .meta-link { padding: 2px 8px; border-radius: 99px; transition: background .14s, color .14s; }
+  .meta-link { padding: 2px 8px; border-radius: 99px; transition: background .14s, color .14s; color: var(--brand-ink); }
   .meta-link:hover { background: var(--brand-soft); }
 
   /* avatars: pop on hover, raise above stack */
@@ -498,7 +498,7 @@
     <div class="nav-item" id="nav-activity" onclick="setView('activity')">Activity</div>
     <div class="nav-item" id="nav-people" onclick="setView('people')">People</div>
     <div class="nav-item" id="nav-highlights" onclick="setView('highlights')">Highlights</div>
-    <div class="sidebar-title">Subjects</div>
+    <div class="sidebar-title" id="subjectsHeading">Subjects</div>
     <div id="subjectTabs"></div>
     <div id="adminTools" style="display:none">
     <div class="add-subject" style="margin-top:16px;">
@@ -1434,7 +1434,16 @@ function renderSidebar() {
   }).join('');
 }
 
+// The Subjects rail belongs to the Readings view only — hide it elsewhere so
+// Activity / People / Highlights / Profile start near the top.
+function applyViewChrome() {
+  const onReadings = currentView === 'readings' && !searchQuery;
+  const h = document.getElementById('subjectsHeading'); if (h) h.style.display = onReadings ? '' : 'none';
+  const st = document.getElementById('subjectTabs'); if (st) st.style.display = onReadings ? '' : 'none';
+  const at = document.getElementById('adminTools'); if (at) at.style.display = (onReadings && isAdmin) ? '' : 'none';
+}
 function renderMain() {
+  applyViewChrome();
   const panel = document.getElementById('mainPanel');
   if (searchQuery) return renderSearch(panel);
   if (currentView === 'activity') return renderActivity(panel);
