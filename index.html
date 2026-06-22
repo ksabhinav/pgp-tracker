@@ -1784,11 +1784,13 @@ function readingItem(r, luUrl) {
   const thread = openComments[r.id] ? renderThread(r.id, cmts) : '';
   // admin: turn a (non-readable) reading into a reflowed PDF in the reader
   const pdfBtn = (isAdmin && !rmode) ? `<label class="meta-link pdf-make" title="Attach a PDF to open this reading in the in-app reader">make readable<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="onAdminPdf('${r.id}', this)"></label>` : '';
-  // admin: re-run extraction on an existing PDF reading (picks up extractor/parser improvements)
-  const reExtractBtn = (isAdmin && rmode && rmode.rc && rmode.rc.kind === 'pdf') ? `<a class="meta-link" onclick="reExtractPdf('${r.id}')" title="Re-run PDF extraction">re-extract</a>` : '';
+  // admin: re-run extraction on an existing PDF reading (fast pdf.js, or LlamaParse for tables)
+  const isPdf = isAdmin && rmode && rmode.rc && rmode.rc.kind === 'pdf';
+  const reExtractBtn = isPdf ? `<a class="meta-link" onclick="reExtractPdf('${r.id}')" title="Re-run fast extraction">re-extract</a>` : '';
+  const betterBtn = isPdf ? `<a class="meta-link" onclick="betterTablesPdf('${r.id}')" title="Re-parse with LlamaParse for proper tables">better tables</a>` : '';
   const hasMeta = done.length || hasC || r.added_by || openComments[r.id] || pdfBtn || reExtractBtn;
   const metaRow = hasMeta
-    ? `<div class="reading-meta">${completersHTML}${cmtToggle}${pdfBtn}${reExtractBtn}${addedHTML}</div>`
+    ? `<div class="reading-meta">${completersHTML}${cmtToggle}${pdfBtn}${reExtractBtn}${betterBtn}${addedHTML}</div>`
     : `<div class="reading-meta reading-meta-hover">${cmtToggle}</div>`;
   return `<div class="reading-item${checked ? ' checked' : ''}" id="ri_${r.id}">
     <input type="checkbox" id="cb_${r.id}" ${checked ? 'checked' : ''} onchange="toggleReading('${r.id}')">
@@ -2408,6 +2410,22 @@ async function reExtractPdf(rId) {
     setSync('✓ Re-extracted', 'ok'); setTimeout(() => setSync(''), 2000);
     await loadSocial(); renderMain();
   } catch (e) { console.warn('re-extract failed', e); setSync('⚠ Re-extract failed', 'err'); setTimeout(() => setSync(''), 2500); }
+}
+// Admin: re-parse a PDF with LlamaParse (proper tables) via the extract-pdf edge function.
+async function betterTablesPdf(rId) {
+  const r = readingObjs[rId]; const rc = r && contentFor(r);
+  if (!rc || rc.kind !== 'pdf' || !rc.source_file || !isAdmin || !sb) return;
+  if (!confirm('Re-parse this PDF with LlamaParse for proper tables? Takes ~30–60s.')) return;
+  setSync('Parsing tables (LlamaParse)…');
+  try {
+    const { error } = await sb.functions.invoke('extract-pdf', { body: { file_url: rc.source_file, url: rc.url, reading_id: r.id, title: rc.title || r.name } });
+    if (error) throw error;
+    setSync('✓ Tables parsed', 'ok'); setTimeout(() => setSync(''), 2500);
+    await loadSocial(); renderMain();
+  } catch (e) {
+    console.warn('parser failed', e); setSync('⚠ Parser unavailable', 'err'); setTimeout(() => setSync(''), 3000);
+    alert('The table parser isn’t available yet. Deploy the extract-pdf edge function and set LLAMA_CLOUD_API_KEY — see supabase/functions/extract-pdf.');
+  }
 }
 // Admin: turn a PDF file into reflowed reader content for a reading.
 async function addPdfReading(reading, file) {
