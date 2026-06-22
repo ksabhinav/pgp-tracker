@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PGP Tracker Auto-Sync + Clip-to-Reader
 // @namespace    pgp10-reading-tracker
-// @version      2.0
+// @version      2.1
 // @description  (1) On OpenTakshashila LU pages, silently sync readings to the PGP Tracker. (2) On ANY page, an admin can clip the article (or a video) into the shared distraction-free reader with Alt+R or the “Clip” button.
 // @match        *://*/*
 // @run-at       document-idle
@@ -16,7 +16,8 @@
   var SUPA_URL = 'https://hjpqbfzhjsxdxxbrvkvi.supabase.co';
   var KEY = 'sb_publishable_4VnssfN1prmotvDYx7qWhg_yb6KQ8oz';
   var IS_OT = /(^|\.)opentakshashila\.net$/i.test(location.hostname);
-  var IS_APP = /(^|\.)github\.io$/i.test(location.hostname) || /\/pgp-tracker\//.test(location.pathname);   // the tracker itself — no Clip button here
+  // the tracker itself — no Clip button here (meta tag is the reliable signal, even for the installed PWA / custom host)
+  var IS_APP = !!document.querySelector('meta[name="pgp-app"]') || /(^|\.)github\.io$/i.test(location.hostname) || /\/pgp-tracker\//.test(location.pathname);
 
   function hash(s) { var h = 0; for (var i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) | 0; } return h; }
 

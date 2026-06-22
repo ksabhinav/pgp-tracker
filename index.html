@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>PGP Reading Tracker</title>
 <meta name="description" content="Track your PGP mandatory and recommended readings across subjects.">
+<meta name="pgp-app" content="1"><!-- lets the userscript recognise the tracker and hide its Clip button here -->
 <!-- PWA -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#620D3C">
@@ -337,6 +338,8 @@
   .day-break { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--faint); margin: 22px 0 4px; padding-bottom: 5px; border-bottom: 1px solid var(--hair); }
   .day-break:first-child { margin-top: 0; }
   .test-tag { display: inline-block; font-size: .58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gold); background: var(--gold-soft); padding: 1px 6px; border-radius: 99px; margin-left: 5px; vertical-align: middle; }
+  .pf-toggle { display: flex; align-items: center; gap: 9px; font-size: .85rem; color: var(--text); margin: 7px 0; cursor: pointer; }
+  .pf-toggle input { width: 17px; height: 17px; accent-color: var(--brand); cursor: pointer; flex-shrink: 0; }
 
   /* ── READER + HIGHLIGHTS ─────────────────────────────────────────── */
   .reader-link { cursor: pointer; }
@@ -542,10 +545,23 @@
     <div id="profPreview" style="text-align:center;margin-bottom:14px"></div>
     <input type="text" id="profName" placeholder="Display name" />
     <div style="font-size:.68rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 2px">Choose an avatar</div>
-    <div id="avatarGrid" style="max-height:300px;overflow:auto;margin-right:-6px;padding-right:6px"></div>
+    <div id="avatarGrid" style="max-height:240px;overflow:auto;margin-right:-6px;padding-right:6px"></div>
+    <div style="font-size:.68rem;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 4px">Privacy — what the cohort sees</div>
+    <label class="pf-toggle"><input type="checkbox" id="pfShareComp"><span>Show readings I complete</span></label>
+    <label class="pf-toggle"><input type="checkbox" id="pfShareHL"><span>Show my highlights to others</span></label>
+    <label class="pf-toggle"><input type="checkbox" id="pfShareCmt"><span>Show my comments to others</span></label>
+    <div style="font-size:.72rem;color:var(--faint);margin-top:4px">Turning one off hides it from the feed, people's timelines, and (for highlights) other readers — you'll still see your own.</div>
     <div class="modal-actions" style="margin-top:18px">
       <button class="btn btn-primary" onclick="saveProfile()">Save profile</button>
     </div>
+  </div>
+</div>
+
+<!-- Member activity timeline -->
+<div class="modal-bg" id="personModal">
+  <div class="modal" style="width:480px;max-height:82vh">
+    <div id="personModalBody"></div>
+    <div class="modal-actions" style="margin-top:14px"><button class="btn" onclick="closeModal('personModal')">Close</button></div>
   </div>
 </div>
 
@@ -779,7 +795,8 @@ document.documentElement.setAttribute('data-theme', 'light');
 
 // ── VIEWS / NAVIGATION ────────────────────────────────────────────────────────
 let currentView = 'readings', searchQuery = '';
-let activityItems = [], readingIndex = {};
+let activityItems = [], allActivity = [], readingIndex = {};
+let pvNoComp = new Set(), pvNoHL = new Set(), pvNoCmt = new Set();   // members who opted out of sharing each
 function setView(v) {
   currentView = v; searchQuery = '';
   const si = document.getElementById('searchInput'); if (si) si.value = '';
@@ -1086,31 +1103,40 @@ async function loadSocial() {
   if (!sb || !currentUser) return;
   try {
     const [pf, cm, sr, co] = await Promise.all([
-      sb.from('profiles').select('user_id,name,emoji,color,hidden'),
+      sb.from('profiles').select('*'),                                // select * so missing privacy cols don't error
       sb.from('completions').select('user_id,reading_id,created_at'),
       sb.from('shared_readings').select('*'),
       sb.from('comments').select('*').order('created_at')
     ]);
+    const me = currentUser.id;
     profiles = {}; (pf.data || []).forEach(p => profiles[p.user_id] = p);
     const hidden = new Set(Object.keys(profiles).filter(u => profiles[u].hidden));   // dummy/test accounts — hidden from everyone
+    // per-member privacy opt-outs (default = share; only an explicit false hides)
+    pvNoComp = new Set(Object.keys(profiles).filter(u => profiles[u].share_completions === false));
+    pvNoHL   = new Set(Object.keys(profiles).filter(u => profiles[u].share_highlights === false));
+    pvNoCmt  = new Set(Object.keys(profiles).filter(u => profiles[u].share_comments === false));
     completers = {}; const mine = {}; const acts = [];
     (cm.data || []).forEach(c => {
-      if (c.user_id === currentUser.id) mine[c.reading_id] = true;   // my own progress (even if I'm hidden)
-      if (hidden.has(c.user_id)) return;                             // never show in public views
-      (completers[c.reading_id] = completers[c.reading_id] || []).push(c.user_id);
-      acts.push({ kind: 'done', user_id: c.user_id, reading_id: c.reading_id, at: c.created_at });
+      const u = c.user_id;
+      if (u === me) mine[c.reading_id] = true;                        // my own progress (even if I don't share it)
+      if (hidden.has(u) || pvNoComp.has(u)) return;                   // hidden from public views
+      (completers[c.reading_id] = completers[c.reading_id] || []).push(u);
+      acts.push({ kind: 'done', user_id: u, reading_id: c.reading_id, at: c.created_at });
     });
     userData.checked = mine;                       // my completions drive my progress
     sharedReadings = {}; (sr.data || []).forEach(r => { if (hidden.has(r.added_by)) return; (sharedReadings[r.lu_id] = sharedReadings[r.lu_id] || []).push(r); });
     comments = {}; (co.data || []).forEach(c => {
-      if (hidden.has(c.user_id)) return;
+      const u = c.user_id;
+      if (hidden.has(u)) return;
       if (c.highlight_id) return;                    // highlight-scoped notes live in the reader, not the reading thread
-      (comments[c.reading_id] = comments[c.reading_id] || []).push(c);
-      acts.push({ kind: 'comment', user_id: c.user_id, reading_id: c.reading_id, body: c.body, at: c.created_at });
+      const shareOff = pvNoCmt.has(u);
+      if (!shareOff || u === me) (comments[c.reading_id] = comments[c.reading_id] || []).push(c);   // own always visible to me
+      if (!shareOff) acts.push({ kind: 'comment', user_id: u, reading_id: c.reading_id, body: c.body, at: c.created_at });
     });
-    myProfile = profiles[currentUser.id] || null;
+    myProfile = profiles[me] || null;
     buildReadingIndex();
-    activityItems = acts.filter(a => a.at).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 60);
+    allActivity = acts.filter(a => a.at);
+    activityItems = [...allActivity].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 60);
   } catch (e) { console.warn('social load failed', e); }
 
   // Reader layer (separate + resilient: works even before reader-schema.sql is applied).
@@ -1119,11 +1145,22 @@ async function loadSocial() {
       sb.from('reading_content').select('*'),
       sb.from('highlights').select('*')
     ]);
+    const me = currentUser.id;
     const hidden = new Set(Object.keys(profiles).filter(u => profiles[u].hidden));
     readingContent = {}; readingContentById = {};
     (rcd.data || []).forEach(c => { if (c.url) readingContent[normUrl(c.url)] = c; if (c.reading_id) readingContentById[c.reading_id] = c; });
-    highlightsByReading = {};
-    (hl.data || []).forEach(h => { if (hidden.has(h.user_id)) return; (highlightsByReading[h.reading_id] = highlightsByReading[h.reading_id] || []).push(h); });
+    highlightsByReading = {}; const hlActs = [];
+    (hl.data || []).forEach(h => {
+      const u = h.user_id;
+      if (hidden.has(u)) return;
+      if (pvNoHL.has(u) && u !== me) return;        // others' hidden highlights; keep my own (for reader + My Highlights)
+      (highlightsByReading[h.reading_id] = highlightsByReading[h.reading_id] || []).push(h);
+      if (!pvNoHL.has(u) && h.created_at) hlActs.push({ kind: 'highlight', user_id: u, reading_id: h.reading_id, quote: h.quote, at: h.created_at });
+    });
+    if (hlActs.length) {                            // fold highlights into the activity timelines
+      allActivity = allActivity.concat(hlActs);
+      activityItems = [...allActivity].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 60);
+    }
     cacheReaderOffline();                          // keep a local copy so the reader works offline
   } catch (e) { hydrateReaderCache(); /* offline or schema not applied — fall back to the cached copy */ }
 }
@@ -1214,6 +1251,9 @@ function openProfile() {
     AVATAR_IDS.map(id => `<button class="av-pick" data-id="${id}" onclick="selAvatar='${id}';renderProfPicker()"><img src="${avatarSrc(id)}" alt="" loading="lazy"></button>`).join('') +
     '</div>';
   renderProfPicker();
+  document.getElementById('pfShareComp').checked = cur.share_completions !== false;   // default on
+  document.getElementById('pfShareHL').checked = cur.share_highlights !== false;
+  document.getElementById('pfShareCmt').checked = cur.share_comments !== false;
   document.getElementById('profileModal').classList.add('open');
 }
 function renderProfPicker() {
@@ -1224,12 +1264,23 @@ async function saveProfile() {
   const name = document.getElementById('profName').value.trim() || (currentUser.email.split('@')[0]);
   const color = (myProfile && myProfile.color) || hashColor(currentUser.id);
   const hidden = HIDDEN_EMAILS.includes((currentUser.email || '').toLowerCase());
+  const priv = {
+    share_completions: document.getElementById('pfShareComp').checked,
+    share_highlights: document.getElementById('pfShareHL').checked,
+    share_comments: document.getElementById('pfShareCmt').checked
+  };
   try {
     await sb.from('profiles').upsert({ user_id: currentUser.id, name, emoji: selAvatar, color, hidden, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-    myProfile = { user_id: currentUser.id, name, emoji: selAvatar, color, hidden };
+    myProfile = { ...(myProfile || {}), user_id: currentUser.id, name, emoji: selAvatar, color, hidden };
     profiles[currentUser.id] = myProfile;
   } catch (e) { console.warn('profile save failed', e); }
+  // privacy toggles saved separately so a pre-migration DB (missing columns) still saves name/avatar
+  try {
+    await sb.from('profiles').update(priv).eq('user_id', currentUser.id);
+    Object.assign(myProfile, priv);
+  } catch (e) { console.warn('privacy save failed (run reader-schema.sql for the new columns)', e); }
   closeModal('profileModal');
+  await loadSocial();                     // re-apply privacy across all views immediately
   renderAll(); renderAcct();
 }
 
@@ -1431,7 +1482,9 @@ function renderActivity(panel) {
     const where = `<a class="meta-link" onclick="goToReading('${a.reading_id}')">${esc(ri.name)}</a>`;
     const body = a.kind === 'done'
       ? `${who} completed ${where}`
-      : `${who} commented on ${where}<div style="color:var(--muted);margin-top:3px">“${esc(a.body)}”</div>`;
+      : a.kind === 'highlight'
+        ? `${who} highlighted in ${where}<div style="color:var(--muted);margin-top:3px">“${esc((a.quote || '').slice(0, 160))}”</div>`
+        : `${who} commented on ${where}<div style="color:var(--muted);margin-top:3px">“${esc(a.body)}”</div>`;
     parts.push(`<div class="feed-item">${avatarHTML(a.user_id, 30)}<div style="flex:1;min-width:0"><div class="feed-body">${body}</div><div class="feed-time">${esc(ri.subject)} · ${ri.lu.replace(/:.*/, '')} · ${timeAgo(a.at)}</div></div></div>`);
   });
   panel.innerHTML = `<div class="panel-title">Recent activity</div><div class="panel-sub">Completions and discussions across the cohort.</div>${parts.length ? parts.join('') : '<div class="empty"><p>No activity yet — be the first to tick a reading or start a discussion.</p></div>'}`;
@@ -1448,14 +1501,36 @@ function renderPeople(panel) {
   // include everyone with a (non-hidden) profile, even 0 completions
   Object.keys(profiles).forEach(u => { if (profiles[u].hidden) return; if (!(u in counts)) counts[u] = 0; });
   const people = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
-  const cards = people.map(u => `<div class="person-card">
+  const cards = people.map(u => `<div class="person-card" onclick="openPersonTimeline('${u}')" style="cursor:pointer" title="See ${esc(nameOf(u))}'s activity">
       ${avatarHTML(u, 42)}
       <div style="min-width:0">
         <div style="font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(nameOf(u))}${u === currentUser.id ? ' <span style="color:var(--faint);font-weight:500">(you)</span>' : ''}${testTag(u)}</div>
         <div style="font-size:.78rem;color:var(--muted)">${counts[u]} reading${counts[u] === 1 ? '' : 's'} completed</div>
       </div>
     </div>`).join('');
-  panel.innerHTML = `<div class="panel-title">People</div><div class="panel-sub">${people.length} member${people.length === 1 ? '' : 's'} in the cohort.</div><div class="people-grid">${cards || '<div class="empty"><p>No one has signed in yet.</p></div>'}</div>`;
+  panel.innerHTML = `<div class="panel-title">People</div><div class="panel-sub">${people.length} member${people.length === 1 ? '' : 's'} in the cohort. Tap anyone to see their activity.</div><div class="people-grid">${cards || '<div class="empty"><p>No one has signed in yet.</p></div>'}</div>`;
+}
+
+// A single member's timeline (what they've shared: completions, highlights, comments).
+function openPersonTimeline(uid) {
+  const items = allActivity.filter(a => a.user_id === uid && a.at).sort((a, b) => new Date(b.at) - new Date(a.at));
+  let lastDay = ''; const parts = [];
+  items.forEach(a => {
+    const ri = readingIndex[a.reading_id]; if (!ri) return;
+    const dl = dayLabel(a.at);
+    if (dl !== lastDay) { lastDay = dl; parts.push(`<div class="day-break">${dl}</div>`); }
+    const where = `<a class="meta-link" onclick="closeModal('personModal');goToReading('${a.reading_id}')">${esc(ri.name)}</a>`;
+    const line = a.kind === 'done' ? `completed ${where}`
+      : a.kind === 'highlight' ? `highlighted in ${where}<div style="color:var(--muted);margin-top:2px">“${esc((a.quote || '').slice(0, 160))}”</div>`
+      : `commented on ${where}<div style="color:var(--muted);margin-top:2px">“${esc(a.body)}”</div>`;
+    parts.push(`<div style="padding:8px 0;border-bottom:1px solid var(--hair)"><div style="font-size:.86rem">${line}</div><div style="font-size:.72rem;color:var(--faint);margin-top:3px">${esc(ri.subject)} · ${(ri.lu || '').replace(/:.*/, '')} · ${timeAgo(a.at)}</div></div>`);
+  });
+  document.getElementById('personModalBody').innerHTML =
+    `<div style="display:flex;align-items:center;gap:11px;margin-bottom:12px">${avatarHTML(uid, 44)}
+      <div style="min-width:0"><div style="font-weight:750;font-size:1.05rem">${esc(nameOf(uid))}${uid === (currentUser && currentUser.id) ? ' <span style="color:var(--faint);font-weight:500;font-size:.8rem">(you)</span>' : ''}${testTag(uid)}</div>
+      <div style="font-size:.76rem;color:var(--muted)">${items.length} shared activit${items.length === 1 ? 'y' : 'ies'}</div></div></div>
+    ${parts.length ? parts.join('') : '<div class="empty" style="padding:20px 0"><p>Nothing shared yet.</p></div>'}`;
+  document.getElementById('personModal').classList.add('open');
 }
 
 // ── My Highlights view ────────────────────────────────────────────────────────

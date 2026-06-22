@@ -67,6 +67,13 @@ create policy "highlights write own" on public.highlights for all
 alter table public.comments add column if not exists highlight_id uuid
   references public.highlights(id) on delete cascade;
 
+-- == Per-member privacy toggles (default: share everything) ===================
+-- When false, that member's completions / highlights / comments are hidden from
+-- everyone else's public views (the member still sees their own).
+alter table public.profiles add column if not exists share_completions boolean default true;
+alter table public.profiles add column if not exists share_highlights  boolean default true;
+alter table public.profiles add column if not exists share_comments    boolean default true;
+
 -- == Realtime (live highlights / content across devices) =====================
 do $$ begin alter publication supabase_realtime add table public.reading_content;
 exception when duplicate_object then null; end $$;
