@@ -2422,6 +2422,7 @@ function openReader(rId) {
   const r = readingObjs[rId]; if (!r) return;
   const m = readerMode(r);
   if (!m) { if (r.url) window.open(r.url, '_blank', 'noopener'); return; }   // nothing captured → just open source
+  closeHlSheet(); hideHlTools(); closeFontMenu();   // clear any leftover reader overlays
   ensureReaderFonts();
   curReader = { rId, rc: m.rc, mode: m.mode };
   const ov = document.getElementById('readerOverlay');
