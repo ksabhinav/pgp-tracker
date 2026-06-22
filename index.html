@@ -2495,6 +2495,21 @@ document.addEventListener('keydown', e => {
 // ── INIT ─────────────────────────────────────────────────────────────────────
 boot();
 
+// Defensively hide the auto-sync userscript's floating "PGP:" pill if it ever shows
+// up on the tracker itself (covers older installed userscript versions that predate
+// the in-app suppression). The pill is a fixed-position <div> whose text starts "PGP:".
+(function hideUserscriptPill() {
+  const kill = el => {
+    if (el && el.nodeType === 1 && el.tagName === 'DIV' && /^PGP:/.test((el.textContent || '').trim())) {
+      try { if (getComputedStyle(el).position === 'fixed') el.style.display = 'none'; } catch (e) {}
+    }
+  };
+  const scan = () => { if (document.body) document.querySelectorAll('body > div').forEach(kill); };
+  scan();
+  try { new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(kill))).observe(document.body, { childList: true }); } catch (e) {}
+  setTimeout(scan, 1500); setTimeout(scan, 3500);   // userscript injects late (document-idle)
+})();
+
 // ── SERVICE WORKER (offline + installable) ────────────────────────────────────
 if ('serviceWorker' in navigator) {
   let refreshing = false;
