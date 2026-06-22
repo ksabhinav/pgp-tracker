@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         PGP Tracker Auto-Sync + Clip-to-Reader
 // @namespace    pgp10-reading-tracker
-// @version      2.1
-// @description  (1) On OpenTakshashila LU pages, silently sync readings to the PGP Tracker. (2) On ANY page, an admin can clip the article (or a video) into the shared distraction-free reader with Alt+R or the “Clip” button.
+// @version      2.2
+// @description  (1) On OpenTakshashila LU pages, silently sync readings to the PGP Tracker. (2) The "Clip" button appears ONLY on pages that are readings in your catalog, so an admin can clip that article/video into the shared reader (Alt+R also works anywhere as a manual override).
 // @match        *://*/*
 // @run-at       document-idle
 // @grant        GM_xmlhttpRequest
 // @connect      hjpqbfzhjsxdxxbrvkvi.supabase.co
 // @require      https://cdn.jsdelivr.net/npm/@mozilla/readability@0.5.0/Readability.js
+// @updateURL    https://raw.githubusercontent.com/ksabhinav/pgp-tracker/main/userscript/pgp-autosync.user.js
+// @downloadURL  https://raw.githubusercontent.com/ksabhinav/pgp-tracker/main/userscript/pgp-autosync.user.js
 // ==/UserScript==
 (function () {
   'use strict';
@@ -20,6 +22,26 @@
   var IS_APP = !!document.querySelector('meta[name="pgp-app"]') || /(^|\.)github\.io$/i.test(location.hostname) || /\/pgp-tracker\//.test(location.pathname);
 
   function hash(s) { var h = 0; for (var i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) | 0; } return h; }
+
+  // lenient URL key (ignore protocol / www / query / hash) for matching the page against catalog readings
+  function urlKey(u) { try { var x = new URL(u); return x.hostname.replace(/^www\./, '').toLowerCase() + x.pathname.replace(/\/$/, '').toLowerCase(); } catch (e) { return String(u || '').trim().toLowerCase(); } }
+  // fetch the world-readable catalog and collect every reading URL
+  function fetchReadingUrls(cb) {
+    GM_xmlhttpRequest({
+      method: 'GET',
+      url: SUPA_URL + '/rest/v1/catalog?id=eq.1&select=data',
+      headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY },
+      onload: function (res) {
+        var set = {};
+        try {
+          var rows = JSON.parse(res.responseText), cat = (rows[0] && rows[0].data) || {};
+          (cat.subjects || []).forEach(function (s) { (s.lus || []).forEach(function (lu) { ['mandatory', 'recommended'].forEach(function (t) { (lu[t] || []).forEach(function (r) { if (r.url && !/youtube\.com|youtu\.be|vimeo\.com/.test(r.url)) set[urlKey(r.url)] = 1; }); }); }); });   // skip videos (they embed live; no clip needed)
+        } catch (e) {}
+        cb(set);
+      },
+      onerror: function () { cb({}); }
+    });
+  }
 
   // ── status pills ──────────────────────────────────────────────────────────
   function makePill(side) {
@@ -122,6 +144,8 @@
     var lastUrl = '';
     setInterval(function () { if (location.href !== lastUrl) { lastUrl = location.href; lastSig = null; } syncIfNew(false); }, 2500);
   }
-  // Show the Clip button on real article pages — never on the tracker itself.
-  if (/^https?:/.test(location.href) && !IS_APP) setTimeout(function () { setClipPill('PGP: Clip ✂', '#620D3C'); }, 1200);
+  // Show the Clip button ONLY on pages that are readings in the catalog (never on the tracker, never on random sites).
+  if (/^https?:/.test(location.href) && !IS_APP && !IS_OT) {
+    fetchReadingUrls(function (set) { if (set[urlKey(location.href)]) setClipPill('PGP: Clip ✂', '#620D3C'); });
+  }
 })();
