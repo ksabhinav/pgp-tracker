@@ -1788,7 +1788,12 @@ function readingItem(r, luUrl) {
   const cmtToggle = `<a class="meta-link" onclick="toggleComments('${r.id}')">${hasC ? 'Discuss · ' + cmts.length : 'Discuss'}</a>`;
   const thread = openComments[r.id] ? renderThread(r.id, cmts) : '';
   // admin: turn a (non-readable) reading into a reflowed PDF in the reader
-  const pdfBtn = (isAdmin && !rmode) ? `<label class="meta-link pdf-make" title="Attach a PDF to open this reading in the in-app reader">make readable<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="onAdminPdf('${r.id}', this)"></label>` : '';
+  const urlIsPdf = r.url && /\.pdf($|\?|#)/i.test(r.url);
+  const pdfBtn = (isAdmin && !rmode)
+    ? (urlIsPdf
+      ? `<a class="meta-link" onclick="makeReadableFromUrl('${r.id}')" title="Extract this PDF straight from its link — no upload">make readable</a>`
+      : `<label class="meta-link pdf-make" title="Attach a PDF to open this reading in the in-app reader">make readable (upload)<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="onAdminPdf('${r.id}', this)"></label>`)
+    : '';
   // admin: re-run extraction on an existing PDF reading (fast pdf.js, or LlamaParse for tables)
   const isPdf = isAdmin && rmode && rmode.rc && rmode.rc.kind === 'pdf';
   const reExtractBtn = isPdf ? `<a class="meta-link" onclick="reExtractPdf('${r.id}')" title="Re-run fast extraction">re-extract</a>` : '';
@@ -2415,6 +2420,22 @@ async function reExtractPdf(rId) {
     setSync('✓ Re-extracted', 'ok'); setTimeout(() => setSync(''), 2000);
     await loadSocial(); renderMain();
   } catch (e) { console.warn('re-extract failed', e); setSync('⚠ Re-extract failed', 'err'); setTimeout(() => setSync(''), 2500); }
+}
+// Admin: extract a reading straight from its PDF link (server-side, no upload) via the edge function.
+async function makeReadableFromUrl(rId) {
+  const r = readingObjs[rId];
+  if (!r || !r.url || !isAdmin || !sb) return;
+  if (!confirm('Extract this PDF directly from its link? (~30–60s, server-side)')) return;
+  setSync('Fetching & parsing PDF…');
+  try {
+    const { error } = await sb.functions.invoke('extract-pdf', { body: { file_url: r.url, url: normUrl(r.url), reading_id: r.id, title: r.name } });
+    if (error) throw error;
+    setSync('✓ PDF ready to read', 'ok'); setTimeout(() => setSync(''), 2500);
+    await loadSocial(); renderMain();
+  } catch (e) {
+    console.warn('url extract failed', e); setSync('⚠ Extract failed', 'err'); setTimeout(() => setSync(''), 3000);
+    alert('Could not extract from the link — the PDF host may block server access (try the upload instead), or the extract-pdf function isn’t deployed.');
+  }
 }
 // Admin: re-parse a PDF with LlamaParse (proper tables) via the extract-pdf edge function.
 async function betterTablesPdf(rId) {
