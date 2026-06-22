@@ -16,6 +16,7 @@
   var SUPA_URL = 'https://hjpqbfzhjsxdxxbrvkvi.supabase.co';
   var KEY = 'sb_publishable_4VnssfN1prmotvDYx7qWhg_yb6KQ8oz';
   var IS_OT = /(^|\.)opentakshashila\.net$/i.test(location.hostname);
+  var IS_APP = /(^|\.)github\.io$/i.test(location.hostname) || /\/pgp-tracker\//.test(location.pathname);   // the tracker itself — no Clip button here
 
   function hash(s) { var h = 0; for (var i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) | 0; } return h; }
 
@@ -112,14 +113,14 @@
         function () { setClipPill('PGP: ✓ clipped to reader', '#1f8a3b'); });
     } catch (e) { console.warn('[PGP] extract error', e); setClipPill('PGP: extract error', '#b00'); }
   }
-  // Alt+R clips the current page.
-  window.addEventListener('keydown', function (e) { if (e.altKey && (e.key === 'r' || e.key === 'R')) { e.preventDefault(); captureCurrent(); } }, true);
+  // Alt+R clips the current page (not on the tracker itself).
+  if (!IS_APP) window.addEventListener('keydown', function (e) { if (e.altKey && (e.key === 'r' || e.key === 'R')) { e.preventDefault(); captureCurrent(); } }, true);
 
   // ── boot ──────────────────────────────────────────────────────────────────
   if (IS_OT) {
     var lastUrl = '';
     setInterval(function () { if (location.href !== lastUrl) { lastUrl = location.href; lastSig = null; } syncIfNew(false); }, 2500);
   }
-  // Show the Clip button everywhere except blank/extension pages.
-  if (/^https?:/.test(location.href)) setTimeout(function () { setClipPill('PGP: Clip ✂', '#620D3C'); }, 1200);
+  // Show the Clip button on real article pages — never on the tracker itself.
+  if (/^https?:/.test(location.href) && !IS_APP) setTimeout(function () { setClipPill('PGP: Clip ✂', '#620D3C'); }, 1200);
 })();
