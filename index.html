@@ -1471,7 +1471,6 @@ function applyViewChrome() {
   const h = document.getElementById('subjectsHeading'); if (h) h.style.display = showRail ? '' : 'none';
   const st = document.getElementById('subjectTabs'); if (st) st.style.display = showRail ? '' : 'none';
   const at = document.getElementById('adminTools'); if (at) at.style.display = (onReadings && isAdmin) ? '' : 'none';
-  const searchEl = document.querySelector('.search-box'); if (searchEl) searchEl.style.display = currentView === 'readings' ? '' : 'none';
   // sync the bottom tab bar's active item
   const navView = currentView === 'person' ? 'people' : (searchQuery ? 'readings' : currentView);
   ['readings', 'activity', 'people', 'highlights'].forEach(n => { const b = document.querySelector('.bottom-nav [data-bnav="' + n + '"]'); if (b) b.classList.toggle('on', n === navView); });
