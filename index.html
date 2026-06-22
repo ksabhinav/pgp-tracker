@@ -984,19 +984,18 @@ async function loadSocial() {
       sb.from('comments').select('*').order('created_at')
     ]);
     profiles = {}; (pf.data || []).forEach(p => profiles[p.user_id] = p);
-    const hidden = new Set(Object.keys(profiles).filter(u => profiles[u].hidden));   // dummy/test accounts
-    const hideFrom = !isAdmin;                      // admin sees test accounts (tagged); everyone else doesn't
+    const hidden = new Set(Object.keys(profiles).filter(u => profiles[u].hidden));   // dummy/test accounts — hidden from everyone
     completers = {}; const mine = {}; const acts = [];
     (cm.data || []).forEach(c => {
       if (c.user_id === currentUser.id) mine[c.reading_id] = true;   // my own progress (even if I'm hidden)
-      if (hideFrom && hidden.has(c.user_id)) return;                 // hide from non-admins
+      if (hidden.has(c.user_id)) return;                             // never show in public views
       (completers[c.reading_id] = completers[c.reading_id] || []).push(c.user_id);
       acts.push({ kind: 'done', user_id: c.user_id, reading_id: c.reading_id, at: c.created_at });
     });
     userData.checked = mine;                       // my completions drive my progress
-    sharedReadings = {}; (sr.data || []).forEach(r => { if (hideFrom && hidden.has(r.added_by)) return; (sharedReadings[r.lu_id] = sharedReadings[r.lu_id] || []).push(r); });
+    sharedReadings = {}; (sr.data || []).forEach(r => { if (hidden.has(r.added_by)) return; (sharedReadings[r.lu_id] = sharedReadings[r.lu_id] || []).push(r); });
     comments = {}; (co.data || []).forEach(c => {
-      if (hideFrom && hidden.has(c.user_id)) return;
+      if (hidden.has(c.user_id)) return;
       (comments[c.reading_id] = comments[c.reading_id] || []).push(c);
       acts.push({ kind: 'comment', user_id: c.user_id, reading_id: c.reading_id, body: c.body, at: c.created_at });
     });
@@ -1303,8 +1302,8 @@ function renderPeople(panel) {
   }
   const counts = {};
   Object.values(completers).forEach(list => list.forEach(u => counts[u] = (counts[u] || 0) + 1));
-  // include everyone with a profile (admins also see hidden test accounts)
-  Object.keys(profiles).forEach(u => { if (!isAdmin && profiles[u].hidden) return; if (!(u in counts)) counts[u] = 0; });
+  // include everyone with a (non-hidden) profile, even 0 completions
+  Object.keys(profiles).forEach(u => { if (profiles[u].hidden) return; if (!(u in counts)) counts[u] = 0; });
   const people = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
   const cards = people.map(u => `<div class="person-card">
       ${avatarHTML(u, 42)}
