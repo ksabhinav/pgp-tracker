@@ -354,6 +354,16 @@
     .sidebar .nav-item { display: none; }              /* primary nav moves to the bottom bar */
     .main { padding-bottom: calc(74px + env(safe-area-inset-bottom)); }
   }
+  /* installed (standalone): reclaim header space */
+  @media (display-mode: standalone) {
+    .subtitle { display: none; }
+    header { padding-top: calc(11px + env(safe-area-inset-top)); padding-bottom: 11px; }
+  }
+  /* install hint banner (mobile web only) */
+  .install-hint { display: flex; align-items: center; gap: 10px; background: var(--brand-soft); color: var(--brand-ink); border-bottom: 1px solid var(--border); padding: 9px 16px; font-size: .8rem; font-weight: 500; }
+  .install-hint b { font-weight: 700; }
+  .install-hint .ih-go { background: var(--brand); color: #fff; border: none; border-radius: 7px; padding: 5px 12px; font-size: .78rem; font-weight: 650; cursor: pointer; font-family: inherit; }
+  .install-hint .ih-x { margin-left: auto; background: none; border: none; color: var(--brand-ink); font-size: 1rem; cursor: pointer; padding: 2px 4px; line-height: 1; flex-shrink: 0; }
 
   /* ── READER + HIGHLIGHTS ─────────────────────────────────────────── */
   .reader-link { cursor: pointer; }
@@ -433,6 +443,7 @@
   .hl-quote { font-size: .86rem; line-height: 1.5; border-left: 3px solid var(--ql, #ccc); padding-left: 11px; color: var(--text); margin: 5px 0 7px; }
   .hl-note { font-size: .84rem; color: var(--muted); white-space: pre-wrap; line-height: 1.45; }
   .hl-swatch { width: 19px; height: 19px; border-radius: 50%; cursor: pointer; box-shadow: inset 0 0 0 2px transparent; }
+  .hl-sublabel { font-size: .62rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
   .reader-controls button[data-hl] svg { display: block; }
   /* My Highlights view */
   .hl-group { margin-bottom: 22px; }
@@ -474,6 +485,7 @@
     <div id="syncStatus"></div>
   </div>
 </header>
+<div id="installHint" style="display:none"></div>
 
 <!-- Auth gate -->
 <div id="authOverlay" style="display:none;position:fixed;inset:0;z-index:500;background:#620D3C;color:#fff;align-items:center;justify-content:center;padding:24px">
@@ -1454,9 +1466,12 @@ function renderSidebar() {
 // Activity / People / Highlights / Profile start near the top.
 function applyViewChrome() {
   const onReadings = currentView === 'readings' && !searchQuery;
-  const h = document.getElementById('subjectsHeading'); if (h) h.style.display = onReadings ? '' : 'none';
-  const st = document.getElementById('subjectTabs'); if (st) st.style.display = onReadings ? '' : 'none';
+  // the Subjects rail is only useful when there's more than one subject to switch between (admin keeps it to manage subjects)
+  const showRail = onReadings && (catalog.subjects.length > 1 || isAdmin);
+  const h = document.getElementById('subjectsHeading'); if (h) h.style.display = showRail ? '' : 'none';
+  const st = document.getElementById('subjectTabs'); if (st) st.style.display = showRail ? '' : 'none';
   const at = document.getElementById('adminTools'); if (at) at.style.display = (onReadings && isAdmin) ? '' : 'none';
+  const searchEl = document.querySelector('.search-box'); if (searchEl) searchEl.style.display = currentView === 'readings' ? '' : 'none';
   // sync the bottom tab bar's active item
   const navView = currentView === 'person' ? 'people' : (searchQuery ? 'readings' : currentView);
   ['readings', 'activity', 'people', 'highlights'].forEach(n => { const b = document.querySelector('.bottom-nav [data-bnav="' + n + '"]'); if (b) b.classList.toggle('on', n === navView); });
@@ -1744,9 +1759,11 @@ function readingItem(r, luUrl) {
   const isFallback = !r.url && !!luUrl;   // no direct link → open the OpenTakshashila lesson page
   const ttl = isFallback ? 'Read on OpenTakshashila' : (r.url ? 'Open the source' : '');
   const rmode = readerMode(r);            // captured reading copy, or an embeddable video?
+  const rmins = (rmode && rmode.mode === 'text') ? readingMinutes(rmode.rc) : 0;
+  const readerTag = rmode ? (rmode.mode === 'video' ? '▶ watch' : (rmins ? rmins + ' min' : 'reader')) : '';
   const srcMini = (rmode && r.url) ? `<a href="${esc(r.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="src-mini" title="Open the original">source ↗</a>` : '';
   const nameHtml = rmode
-    ? `<span class="reading-name reader-link" onclick="openReader('${r.id}')" title="${rmode.mode === 'video' ? 'Watch in app' : 'Open in distraction-free reader'}" style="${strike}">${esc(r.name)}<span class="reader-ext">${rmode.mode === 'video' ? '▶ watch' : 'reader'}</span></span>${srcMini}`
+    ? `<span class="reading-name reader-link" onclick="openReader('${r.id}')" title="${rmode.mode === 'video' ? 'Watch in app' : 'Open in distraction-free reader'}" style="${strike}">${esc(r.name)}<span class="reader-ext">${readerTag}</span></span>${srcMini}`
     : (link
       ? `<a href="${esc(link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="reading-name" title="${ttl}" style="${strike}">${esc(r.name)}<span class="ext">↗</span></a>`
       : `<span class="reading-name" onclick="document.getElementById('cb_${r.id}').click()" style="cursor:pointer;${strike}">${esc(r.name)}</span>`);
@@ -2562,9 +2579,10 @@ function openHlSheet(ids) {
     const mine = h.user_id === myId, col = hlAuthorColor(h);
     const noteRead = (!mine && h.note) ? `<div class="hl-note">${esc(h.note)}</div>` : '';
     const ownTools = mine ? `
-      <div style="margin-top:7px;display:flex;gap:6px">
-        <input id="hlNote_${h.id}" value="${esc(h.note || '')}" placeholder="Add a private note…" style="flex:1;padding:6px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:.82rem;font-family:inherit;outline:none">
-        <button onclick="saveHlNote('${h.id}')" style="padding:6px 11px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-size:.78rem;cursor:pointer;font-weight:650;font-family:inherit">Save</button>
+      <div class="hl-sublabel" style="margin-top:9px">Private note <span style="font-weight:500;text-transform:none;letter-spacing:0">— only you see this</span></div>
+      <div style="margin-top:4px;display:flex;gap:6px">
+        <input id="hlNote_${h.id}" value="${esc(h.note || '')}" placeholder="Jot a private note…" style="flex:1;padding:6px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:.82rem;font-family:inherit;outline:none">
+        <button onclick="saveHlNote('${h.id}')" style="padding:6px 11px;background:var(--surface-2);color:var(--brand-ink);border:1px solid var(--border);border-radius:8px;font-size:.78rem;cursor:pointer;font-weight:650;font-family:inherit">Save</button>
       </div>
       <div style="margin-top:7px;display:flex;gap:6px;align-items:center">
         ${HL_COLORS.map(c => `<span class="hl-swatch" onclick="recolorHl('${h.id}','${c}')" style="background:${c};box-shadow:inset 0 0 0 2px ${h.color === c ? 'var(--text)' : 'transparent'}"></span>`).join('')}
@@ -2595,7 +2613,10 @@ function hlDiscussion(h, myId) {
         <button onclick="addHighlightComment('${h.id}')" style="padding:6px 12px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-size:.78rem;cursor:pointer;font-weight:650;font-family:inherit">Post</button>
       </div>`
     : `<div style="font-size:.74rem;color:var(--faint);margin-top:6px"><a onclick="showAuth()" style="color:var(--brand-ink);cursor:pointer">Sign in</a> to discuss.</div>`;
-  return `<div style="margin-top:9px;border-top:1px dashed var(--border);padding-top:7px">${list}${box}</div>`;
+  const n = (commentsByHighlight[h.id] || []).length;
+  return `<div style="margin-top:11px;border-top:1px dashed var(--border);padding-top:9px">
+    <div class="hl-sublabel" style="margin-bottom:5px">Discussion${n ? ' · ' + n : ''} <span style="font-weight:500;text-transform:none;letter-spacing:0">— everyone sees this</span></div>
+    ${list}${box}</div>`;
 }
 async function addHighlightComment(hlId) {
   const inp = document.getElementById('hlc_' + hlId); const body = inp && inp.value.trim();
@@ -2655,6 +2676,27 @@ boot();
   try { new MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(kill))).observe(document.body, { childList: true }); } catch (e) {}
   setTimeout(scan, 1500); setTimeout(scan, 3500);   // userscript injects late (document-idle)
 })();
+
+// ── Install hint (mobile web only — dismissible) ──────────────────────────────
+let deferredInstall = null;
+function isStandalone() { return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; }
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; maybeShowInstallHint(); });
+function maybeShowInstallHint() {
+  const el = document.getElementById('installHint'); if (!el) return;
+  if (isStandalone()) return;
+  try { if (localStorage.getItem('pgp_install_dismissed') === '1') return; } catch (e) {}
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  const isMobile = isIOS || /android/i.test(navigator.userAgent) || window.innerWidth < 820;
+  if (!isMobile) return;
+  if (!deferredInstall && !isIOS) return;          // Android needs the prompt event; iOS shows a manual hint
+  el.innerHTML = isIOS
+    ? `<div class="install-hint"><span>Add <b>PGP</b> to your home screen — tap <b>Share</b> ⎋ then <b>“Add to Home Screen.”</b></span><button class="ih-x" onclick="dismissInstallHint()" aria-label="Dismiss">✕</button></div>`
+    : `<div class="install-hint"><span>Install <b>PGP</b> as an app for the full reader.</span><button class="ih-go" onclick="doInstall()">Install</button><button class="ih-x" onclick="dismissInstallHint()" aria-label="Dismiss">✕</button></div>`;
+  el.style.display = 'block';
+}
+async function doInstall() { if (!deferredInstall) return; deferredInstall.prompt(); try { await deferredInstall.userChoice; } catch (e) {} deferredInstall = null; dismissInstallHint(); }
+function dismissInstallHint() { const el = document.getElementById('installHint'); if (el) el.style.display = 'none'; try { localStorage.setItem('pgp_install_dismissed', '1'); } catch (e) {} }
+setTimeout(maybeShowInstallHint, 1600);            // iOS has no prompt event — show its hint after load
 
 // ── SERVICE WORKER (offline + installable) ────────────────────────────────────
 if ('serviceWorker' in navigator) {
