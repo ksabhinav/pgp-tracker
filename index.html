@@ -354,7 +354,12 @@
   .reader-topbar { position: relative; display: flex; align-items: center; gap: 8px; padding: calc(9px + env(safe-area-inset-top)) 12px 9px; border-bottom: 1px solid rgba(128,128,128,.16); background: inherit; flex-shrink: 0; }
   .reader-progress { position: absolute; left: 0; bottom: -1px; height: 2px; width: 0; background: var(--brand); transition: width .1s linear; }
   .reader-time { font-size: .76rem; opacity: .5; margin: -12px 0 18px; }
-  .reader-body.font-serif { font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, 'Times New Roman', serif; }
+  .font-menu { position: fixed; z-index: 322; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 12px 34px rgba(0,0,0,.28); padding: 6px; display: none; min-width: 172px; }
+  .font-menu.open { display: block; }
+  .font-menu button { display: flex; align-items: center; justify-content: space-between; width: 100%; background: none; border: none; color: inherit; padding: 9px 11px; border-radius: 8px; font-size: 1rem; cursor: pointer; text-align: left; font-family: inherit; }
+  .font-menu button:hover { background: var(--surface-2); }
+  .font-menu button.on { color: var(--brand-ink); }
+  .font-menu .chk { font-size: .82rem; color: var(--brand-ink); width: 14px; }
   .reader-topbar .rt-close { background: none; border: none; font-size: 1.25rem; line-height: 1; cursor: pointer; color: inherit; padding: 4px 9px; border-radius: 8px; }
   .reader-topbar .rt-close:hover { background: rgba(128,128,128,.14); }
   .reader-topbar .rt-name { font-size: .8rem; opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
@@ -367,7 +372,7 @@
   .reader-col.w-narrow { --reader-w: 560px; }
   .reader-col.w-wide   { --reader-w: 840px; }
   .reader-title { font-family: var(--display); font-weight: 800; letter-spacing: -.02em; font-size: 1.7rem; line-height: 1.2; margin: 14px 0 18px; overflow-wrap: break-word; }
-  .reader-body { font-size: var(--reader-fs, 1.06rem); line-height: 1.72; }
+  .reader-body { font-size: var(--reader-fs, 1.06rem); line-height: 1.72; font-family: var(--reader-font, 'Hanken Grotesk', system-ui, sans-serif); }
   .reader-body.fs-s  { --reader-fs: .96rem; }
   .reader-body.fs-l  { --reader-fs: 1.2rem; }
   .reader-body.fs-xl { --reader-fs: 1.38rem; }
@@ -414,6 +419,9 @@
   .hl-quote { font-size: .86rem; line-height: 1.5; border-left: 3px solid var(--ql, #ccc); padding-left: 11px; color: var(--text); margin: 5px 0 7px; }
   .hl-note { font-size: .84rem; color: var(--muted); white-space: pre-wrap; line-height: 1.45; }
   .hl-swatch { width: 19px; height: 19px; border-radius: 50%; cursor: pointer; box-shadow: inset 0 0 0 2px transparent; }
+  .hl-fab { position: fixed; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 318; width: 50px; height: 50px; border-radius: 50%; border: none; background: var(--surface); color: var(--brand); box-shadow: 0 6px 20px rgba(0,0,0,.28); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s, color .15s, transform .12s; }
+  .hl-fab:active { transform: scale(.94); }
+  .hl-fab.on { background: var(--brand); color: #fff; }
   /* My Highlights view */
   .hl-group { margin-bottom: 22px; }
   .hl-group-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
@@ -432,6 +440,7 @@
 <div class="reader-overlay" id="readerOverlay" aria-hidden="true"></div>
 <div class="hl-tools" id="hlTools"></div>
 <div class="hl-sheet" id="hlSheet"></div>
+<div class="font-menu" id="fontMenu"></div>
 <header>
   <div class="hdr-brand">
     <h1><img src="icons/favicon-32.png" class="brand-mark" alt="">PGP Reading Tracker</h1>
@@ -1125,11 +1134,14 @@ async function loadSocial() {
     });
     userData.checked = mine;                       // my completions drive my progress
     sharedReadings = {}; (sr.data || []).forEach(r => { if (hidden.has(r.added_by)) return; (sharedReadings[r.lu_id] = sharedReadings[r.lu_id] || []).push(r); });
-    comments = {}; (co.data || []).forEach(c => {
+    comments = {}; commentsByHighlight = {}; (co.data || []).forEach(c => {
       const u = c.user_id;
       if (hidden.has(u)) return;
-      if (c.highlight_id) return;                    // highlight-scoped notes live in the reader, not the reading thread
       const shareOff = pvNoCmt.has(u);
+      if (c.highlight_id) {                           // a comment attached to a highlight (reader discussion)
+        if (!shareOff || u === me) (commentsByHighlight[c.highlight_id] = commentsByHighlight[c.highlight_id] || []).push(c);
+        return;
+      }
       if (!shareOff || u === me) (comments[c.reading_id] = comments[c.reading_id] || []).push(c);   // own always visible to me
       if (!shareOff) acts.push({ kind: 'comment', user_id: u, reading_id: c.reading_id, body: c.body, at: c.created_at });
     });
@@ -1203,6 +1215,7 @@ function subscribeSocialRealtime() {
     socialReloadTimer = setTimeout(() => loadSocial().then(() => {
       renderAll();
       if (curReader && curReader.mode === 'text') paintHighlights(curReader.rId);   // live highlights while reading
+      if (curSheetIds && document.getElementById('hlSheet').classList.contains('open')) openHlSheet(curSheetIds);   // live discussion
     }), 350);
   };
   socialChannel = sb.channel('social-rt')
@@ -2117,6 +2130,9 @@ let readingContentById = {};   // reading_id  -> reading_content row
 let highlightsByReading = {};  // reading_id  -> [highlight rows]
 let readingObjs = {};          // reading_id  -> the reading object (so openReader can find it)
 let curReader = null;          // { rId, rc, mode }
+let hlMode = false;            // highlighter on: selecting text highlights instantly (Pocket/GoodLinks style)
+let curSheetIds = null;        // highlight ids currently shown in the bottom sheet (for live refresh)
+let commentsByHighlight = {};  // highlight_id -> [comment rows]
 const HL_COLORS = ['#FFD66B', '#9FE6A0', '#7FC4F2', '#F4A6C0', '#C9A6F2'];
 
 // URL normaliser for content keys (distinct from norm() which normalises TITLES).
@@ -2160,8 +2176,8 @@ function pageForOffset(map, off) { for (const m of (map || [])) if (off >= m.sta
 
 // ---- reader preferences (font / width / theme) ----
 function readerPrefs() {
-  try { return Object.assign({ fs: 'm', w: 'med', theme: 'light', font: 'sans' }, JSON.parse(localStorage.getItem('pgp_reader_prefs') || '{}')); }
-  catch (e) { return { fs: 'm', w: 'med', theme: 'light', font: 'sans' }; }
+  try { return Object.assign({ fs: 'm', w: 'med', theme: 'light', font: 'sans', hlColor: '#FFD66B' }, JSON.parse(localStorage.getItem('pgp_reader_prefs') || '{}')); }
+  catch (e) { return { fs: 'm', w: 'med', theme: 'light', font: 'sans', hlColor: '#FFD66B' }; }
 }
 function saveReaderPrefs(p) { try { localStorage.setItem('pgp_reader_prefs', JSON.stringify(p)); } catch (e) {} }
 function applyReaderPrefs() {
@@ -2169,15 +2185,44 @@ function applyReaderPrefs() {
   const p = readerPrefs(), body = ov.querySelector('.reader-body'), col = ov.querySelector('.reader-col');
   ov.classList.toggle('theme-sepia', p.theme === 'sepia');
   ov.classList.toggle('theme-dark', p.theme === 'dark');
-  if (body) { body.classList.remove('fs-s', 'fs-l', 'fs-xl'); if (p.fs !== 'm') body.classList.add('fs-' + p.fs); body.classList.toggle('font-serif', p.font === 'serif'); }
+  if (body) { body.classList.remove('fs-s', 'fs-l', 'fs-xl'); if (p.fs !== 'm') body.classList.add('fs-' + p.fs); body.style.setProperty('--reader-font', fontCss(p.font)); }
   if (col) { col.classList.remove('w-narrow', 'w-wide'); if (p.w === 'narrow') col.classList.add('w-narrow'); if (p.w === 'wide') col.classList.add('w-wide'); }
   ov.querySelectorAll('[data-theme]').forEach(b => b.classList.toggle('on', b.dataset.theme === p.theme));
-  const fb = ov.querySelector('[data-font]'); if (fb) fb.classList.toggle('on', p.font === 'serif');
+  const fb = ov.querySelector('[data-font]'); if (fb) fb.classList.toggle('on', p.font !== 'sans');
 }
 function setReaderPref(k, v) { const p = readerPrefs(); p[k] = v; saveReaderPrefs(p); applyReaderPrefs(); }
 function cycleFont(dir) { const o = ['s', 'm', 'l', 'xl'], p = readerPrefs(); let i = o.indexOf(p.fs); i = Math.max(0, Math.min(o.length - 1, i + dir)); setReaderPref('fs', o[i]); }
 function cycleWidth() { const o = ['narrow', 'med', 'wide'], p = readerPrefs(); let i = (o.indexOf(p.w) + 1) % o.length; setReaderPref('w', o[i]); }
-function toggleSerif() { setReaderPref('font', readerPrefs().font === 'serif' ? 'sans' : 'serif'); }
+
+// ---- font family picker ----
+const FONT_OPTS = [
+  { id: 'sans',    label: 'Sans',        css: "'Hanken Grotesk', system-ui, -apple-system, sans-serif" },
+  { id: 'serif',   label: 'Serif',       css: "Georgia, 'Times New Roman', serif" },
+  { id: 'book',    label: 'Literata',    css: "'Literata', Georgia, serif" },
+  { id: 'legible', label: 'Hyperlegible', css: "'Atkinson Hyperlegible', system-ui, sans-serif" },
+  { id: 'mono',    label: 'Mono',        css: "ui-monospace, 'SF Mono', Menlo, monospace" }
+];
+function fontCss(id) { const f = FONT_OPTS.find(o => o.id === id); return f ? f.css : FONT_OPTS[0].css; }
+function ensureReaderFonts() {
+  if (document.getElementById('readerFonts')) return;
+  const l = document.createElement('link'); l.id = 'readerFonts'; l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap';
+  document.head.appendChild(l);
+}
+function toggleFontMenu(btn) {
+  const menu = document.getElementById('fontMenu');
+  if (menu.classList.contains('open')) { closeFontMenu(); return; }
+  const cur = readerPrefs().font;
+  menu.innerHTML = FONT_OPTS.map(o => `<button class="${o.id === cur ? 'on' : ''}" style="font-family:${o.css}" onclick="pickFont('${o.id}')">${o.label}<span class="chk">${o.id === cur ? '✓' : ''}</span></button>`).join('');
+  const r = btn.getBoundingClientRect();
+  menu.style.top = (r.bottom + 6) + 'px';
+  menu.style.left = Math.max(8, Math.min(r.right - 172, window.innerWidth - 180)) + 'px';
+  menu.classList.add('open');
+  setTimeout(() => document.addEventListener('click', closeFontMenuOutside, true), 0);
+}
+function pickFont(id) { setReaderPref('font', id); closeFontMenu(); }
+function closeFontMenu() { document.getElementById('fontMenu').classList.remove('open'); document.removeEventListener('click', closeFontMenuOutside, true); }
+function closeFontMenuOutside(e) { if (!e.target.closest('#fontMenu') && !e.target.closest('[data-font]')) closeFontMenu(); }
 function readingMinutes(rc) { if (!rc || !rc.content_html) return 0; const w = rc.content_html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean).length; return Math.max(1, Math.round(w / 220)); }
 
 // ---- resume reading position (per reading) ----
@@ -2214,6 +2259,7 @@ function openReader(rId) {
   const r = readingObjs[rId]; if (!r) return;
   const m = readerMode(r);
   if (!m) { if (r.url) window.open(r.url, '_blank', 'noopener'); return; }   // nothing captured → just open source
+  ensureReaderFonts();
   curReader = { rId, rc: m.rc, mode: m.mode };
   const ov = document.getElementById('readerOverlay');
   const bodyHtml = m.mode === 'video'
@@ -2227,7 +2273,7 @@ function openReader(rId) {
       <div class="reader-controls">
         <button onclick="cycleFont(-1)" aria-label="Smaller text" title="Smaller text">A−</button>
         <button onclick="cycleFont(1)" aria-label="Larger text" title="Larger text">A+</button>
-        <button data-font onclick="toggleSerif()" title="Serif / sans-serif" style="font-family:Georgia,serif">Aa</button>
+        <button data-font onclick="toggleFontMenu(this)" title="Reading font" style="font-family:Georgia,serif">Aa</button>
         <button onclick="cycleWidth()" aria-label="Column width" title="Column width">↔</button>
         <button data-theme="light" onclick="setReaderPref('theme','light')" title="Light">☀</button>
         <button data-theme="sepia" onclick="setReaderPref('theme','sepia')" title="Sepia">◐</button>
@@ -2241,11 +2287,13 @@ function openReader(rId) {
         <h1 class="reader-title">${esc((m.rc && m.rc.title) || r.name || '')}</h1>
         ${mins ? `<div class="reader-time">${mins} min read</div>` : ''}
         <div class="reader-body" id="readerBody">${bodyHtml}</div>
-        ${m.mode === 'text' ? '<div class="reader-hint">Select any text to highlight it. Tap a highlight to see who marked it and read notes.</div>' : ''}
+        ${m.mode === 'text' ? '<div class="reader-hint">Select text to highlight it (or tap the pen, then select to mark instantly). Tap a highlight to read & discuss it.</div>' : ''}
       </div>
-    </div>`;
+    </div>
+    ${m.mode === 'text' && currentUser ? `<button class="hl-fab" id="hlFab" onclick="toggleHlMode()" aria-label="Highlighter" title="Highlighter — tap, then select text to mark it instantly">${markerIcon()}</button>` : ''}`;
   ov.classList.add('open'); ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
+  hlMode = false;
   applyReaderPrefs();
   if (m.mode === 'text') { paintHighlights(rId); wireReaderBody(); }
   // resume scroll position + drive the progress bar
@@ -2259,7 +2307,7 @@ function openReader(rId) {
 function closeReader() {
   const ov = document.getElementById('readerOverlay');
   ov.classList.remove('open', 'theme-sepia', 'theme-dark'); ov.setAttribute('aria-hidden', 'true'); ov.innerHTML = '';
-  document.body.style.overflow = ''; closeHlSheet(); hideHlTools(); curReader = null;
+  document.body.style.overflow = ''; closeHlSheet(); hideHlTools(); closeFontMenu(); curReader = null;
 }
 
 // ---- paint everyone's highlights onto the reflowed text ----
@@ -2322,6 +2370,7 @@ function showHlToolsForSelection() {
   if (!currentUser) { hideHlTools(); return; }   // must be signed in to annotate
   const pre = document.createRange(); pre.setStart(body, 0); pre.setEnd(range.startContainer, range.startOffset);
   const start = pre.toString().length, end = start + text.length;
+  if (hlMode) { createHighlight(start, end, text, readerPrefs().hlColor); return; }   // highlighter on → mark instantly
   tools.innerHTML = HL_COLORS.map(c => `<span class="sw" style="background:${c}" data-c="${c}"></span>`).join('');
   tools.querySelectorAll('.sw').forEach(sw => sw.onclick = () => createHighlight(start, end, text, sw.dataset.c));
   const rect = range.getBoundingClientRect();
@@ -2330,10 +2379,13 @@ function showHlToolsForSelection() {
   tools.classList.add('open');
 }
 function hideHlTools() { const t = document.getElementById('hlTools'); if (t) t.classList.remove('open'); }
+function markerIcon() { return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>'; }
+function toggleHlMode() { hlMode = !hlMode; const f = document.getElementById('hlFab'); if (f) f.classList.toggle('on', hlMode); hideHlTools(); }
 
 async function createHighlight(start, end, quote, color) {
   hideHlTools(); const sel = window.getSelection(); if (sel) sel.removeAllRanges();
   if (!currentUser || !curReader || !sb) return;
+  const p = readerPrefs(); p.hlColor = color; saveReaderPrefs(p);   // remember last colour for highlighter mode
   const rId = curReader.rId, rc = curReader.rc;
   const page = rc && rc.page_map ? pageForOffset(rc.page_map, start) : null;
   const row = { reading_id: rId, user_id: currentUser.id, start_off: start, end_off: end, quote: (quote || '').slice(0, 2000), color, page };
@@ -2358,6 +2410,7 @@ function openHlSheet(ids) {
   const all = highlightsByReading[rId] || [];
   const hls = ids.map(id => all.find(h => String(h.id) === String(id))).filter(Boolean);
   if (!hls.length) return;
+  curSheetIds = ids;
   const myId = currentUser && currentUser.id;
   const cards = hls.map(h => {
     const mine = h.user_id === myId, col = hlAuthorColor(h);
@@ -2375,13 +2428,46 @@ function openHlSheet(ids) {
       <div style="display:flex;align-items:center;gap:7px;font-size:.74rem;color:var(--faint)">${avatarHTML(h.user_id, 22)} <b style="color:var(--text)">${esc(nameOf(h.user_id))}</b>${testTag(h.user_id)}${h.created_at ? ' · ' + timeAgo(h.created_at) : ''}${h.page ? ' · p.' + h.page : ''}</div>
       <div class="hl-quote" style="--ql:${col}">${esc(h.quote || '')}</div>
       ${noteRead}${ownTools}
+      ${hlDiscussion(h, myId)}
     </div>`;
   }).join('');
   const sheet = document.getElementById('hlSheet');
   sheet.innerHTML = `<div class="sheet-grip"></div>${cards}<div style="text-align:center;margin-top:12px"><button onclick="closeHlSheet()" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:7px 18px;cursor:pointer;font-size:.82rem;font-family:inherit">Close</button></div>`;
   sheet.classList.add('open');
 }
-function closeHlSheet() { const s = document.getElementById('hlSheet'); if (s) s.classList.remove('open'); }
+// threaded discussion on a highlight (reuses the comments table via highlight_id)
+function hlDiscussion(h, myId) {
+  const list = (commentsByHighlight[h.id] || []).map(c => `<div style="display:flex;gap:7px;padding:5px 0">
+      ${avatarHTML(c.user_id, 20)}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.7rem;color:var(--faint)"><b style="color:var(--text)">${esc(nameOf(c.user_id))}</b>${testTag(c.user_id)} · ${timeAgo(c.created_at)}${c.user_id === myId ? ` · <a onclick="deleteHlComment('${c.id}','${h.id}')" style="color:var(--brand-ink);cursor:pointer">delete</a>` : ''}</div>
+        <div style="font-size:.82rem;line-height:1.4;color:var(--text);white-space:pre-wrap;word-break:break-word">${esc(c.body || '')}</div>
+      </div></div>`).join('');
+  const box = currentUser
+    ? `<div style="display:flex;gap:6px;margin-top:6px">
+        <input id="hlc_${h.id}" placeholder="Comment on this highlight…" onkeydown="if(event.key==='Enter')addHighlightComment('${h.id}')" style="flex:1;padding:6px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:.82rem;font-family:inherit;outline:none">
+        <button onclick="addHighlightComment('${h.id}')" style="padding:6px 12px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-size:.78rem;cursor:pointer;font-weight:650;font-family:inherit">Post</button>
+      </div>`
+    : `<div style="font-size:.74rem;color:var(--faint);margin-top:6px"><a onclick="showAuth()" style="color:var(--brand-ink);cursor:pointer">Sign in</a> to discuss.</div>`;
+  return `<div style="margin-top:9px;border-top:1px dashed var(--border);padding-top:7px">${list}${box}</div>`;
+}
+async function addHighlightComment(hlId) {
+  const inp = document.getElementById('hlc_' + hlId); const body = inp && inp.value.trim();
+  if (!body) return;
+  if (!currentUser) { showAuth(); return; }
+  const rId = curReader && curReader.rId; inp.value = '';
+  (commentsByHighlight[hlId] = commentsByHighlight[hlId] || []).push({ id: 'tmp_' + Date.now(), user_id: currentUser.id, reading_id: rId, body, highlight_id: hlId, created_at: new Date().toISOString() });
+  if (curSheetIds) openHlSheet(curSheetIds);
+  try { await sb.from('comments').insert({ reading_id: rId, user_id: currentUser.id, body, highlight_id: hlId }); await loadSocial(); }
+  catch (e) { console.warn('highlight comment failed', e); }
+  if (curSheetIds) openHlSheet(curSheetIds);
+}
+async function deleteHlComment(id, hlId) {
+  try { await sb.from('comments').delete().eq('id', id); } catch (e) { console.warn('delete comment failed', e); }
+  commentsByHighlight[hlId] = (commentsByHighlight[hlId] || []).filter(c => String(c.id) !== String(id));
+  if (curSheetIds) openHlSheet(curSheetIds);
+}
+function closeHlSheet() { const s = document.getElementById('hlSheet'); if (s) s.classList.remove('open'); curSheetIds = null; }
 async function saveHlNote(id) { const inp = document.getElementById('hlNote_' + id); if (inp) await updateHl(id, { note: inp.value.trim() }); }
 async function recolorHl(id, color) { await updateHl(id, { color }); }
 async function updateHl(id, patch) {
