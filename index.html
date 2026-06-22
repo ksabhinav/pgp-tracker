@@ -348,7 +348,10 @@
   .reader-overlay.open { display: flex; animation: rise .22s var(--ease); }
   .reader-overlay.theme-sepia { --reader-bg: #f4ecd8; --reader-fg: #43381f; }
   .reader-overlay.theme-dark  { --reader-bg: #16131a; --reader-fg: #e7e2ec; }
-  .reader-topbar { display: flex; align-items: center; gap: 8px; padding: calc(9px + env(safe-area-inset-top)) 12px 9px; border-bottom: 1px solid rgba(128,128,128,.16); background: inherit; flex-shrink: 0; }
+  .reader-topbar { position: relative; display: flex; align-items: center; gap: 8px; padding: calc(9px + env(safe-area-inset-top)) 12px 9px; border-bottom: 1px solid rgba(128,128,128,.16); background: inherit; flex-shrink: 0; }
+  .reader-progress { position: absolute; left: 0; bottom: -1px; height: 2px; width: 0; background: var(--brand); transition: width .1s linear; }
+  .reader-time { font-size: .76rem; opacity: .5; margin: -12px 0 18px; }
+  .reader-body.font-serif { font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, 'Times New Roman', serif; }
   .reader-topbar .rt-close { background: none; border: none; font-size: 1.25rem; line-height: 1; cursor: pointer; color: inherit; padding: 4px 9px; border-radius: 8px; }
   .reader-topbar .rt-close:hover { background: rgba(128,128,128,.14); }
   .reader-topbar .rt-name { font-size: .8rem; opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
@@ -408,6 +411,15 @@
   .hl-quote { font-size: .86rem; line-height: 1.5; border-left: 3px solid var(--ql, #ccc); padding-left: 11px; color: var(--text); margin: 5px 0 7px; }
   .hl-note { font-size: .84rem; color: var(--muted); white-space: pre-wrap; line-height: 1.45; }
   .hl-swatch { width: 19px; height: 19px; border-radius: 50%; cursor: pointer; box-shadow: inset 0 0 0 2px transparent; }
+  /* My Highlights view */
+  .hl-group { margin-bottom: 22px; }
+  .hl-group-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .hl-group-head .ttl { font-weight: 700; font-size: .98rem; }
+  .hl-group-head .meta { font-size: .74rem; color: var(--faint); }
+  .hl-group-head a.open { font-size: .74rem; color: var(--brand-ink); cursor: pointer; margin-left: auto; white-space: nowrap; }
+  .hl-row { border-left: 3px solid var(--ql, #ccc); padding: 4px 0 4px 11px; margin: 8px 0; }
+  .hl-row .q { font-size: .86rem; line-height: 1.5; color: var(--text); }
+  .hl-row .n { font-size: .8rem; color: var(--muted); margin-top: 3px; white-space: pre-wrap; }
   @media (max-width: 820px) { .reader-title { font-size: 1.4rem; } .reader-col { padding: 20px 16px 140px; } .reader-controls button { padding: 5px 8px; font-size: .74rem; } }
 </style>
 </head>
@@ -471,6 +483,7 @@
     <div class="nav-item active" id="nav-readings" onclick="setView('readings')">Readings</div>
     <div class="nav-item" id="nav-activity" onclick="setView('activity')">Activity</div>
     <div class="nav-item" id="nav-people" onclick="setView('people')">People</div>
+    <div class="nav-item" id="nav-highlights" onclick="setView('highlights')">Highlights</div>
     <div class="sidebar-title">Subjects</div>
     <div id="subjectTabs"></div>
     <div id="adminTools" style="display:none">
@@ -770,13 +783,13 @@ let activityItems = [], readingIndex = {};
 function setView(v) {
   currentView = v; searchQuery = '';
   const si = document.getElementById('searchInput'); if (si) si.value = '';
-  ['readings', 'activity', 'people'].forEach(n => { const el = document.getElementById('nav-' + n); if (el) el.classList.toggle('active', n === v); });
+  ['readings', 'activity', 'people', 'highlights'].forEach(n => { const el = document.getElementById('nav-' + n); if (el) el.classList.toggle('active', n === v); });
   renderMain();
   const mp = document.getElementById('mainPanel'); if (mp) { mp.classList.remove('view-enter'); void mp.offsetWidth; mp.classList.add('view-enter'); }
 }
 function onSearch() {
   searchQuery = (document.getElementById('searchInput').value || '').trim();
-  ['readings', 'activity', 'people'].forEach(n => { const el = document.getElementById('nav-' + n); if (el) el.classList.toggle('active', !searchQuery && n === currentView); });
+  ['readings', 'activity', 'people', 'highlights'].forEach(n => { const el = document.getElementById('nav-' + n); if (el) el.classList.toggle('active', !searchQuery && n === currentView); });
   renderMain();
 }
 
@@ -1047,6 +1060,7 @@ async function onSession(session) {
 }
 
 async function boot() {
+  hydrateReaderCache();                         // make captured readings openable offline, before any network
   renderAll(); renderAcct(); applyRole();      // instant shell from local cache
   if (!isConfigured()) return;                 // no backend → local-only, no login
   try { sb = window.supabase.createClient(CFG.url, CFG.anonKey); }
@@ -1110,14 +1124,24 @@ async function loadSocial() {
     (rcd.data || []).forEach(c => { if (c.url) readingContent[normUrl(c.url)] = c; if (c.reading_id) readingContentById[c.reading_id] = c; });
     highlightsByReading = {};
     (hl.data || []).forEach(h => { if (hidden.has(h.user_id)) return; (highlightsByReading[h.reading_id] = highlightsByReading[h.reading_id] || []).push(h); });
-  } catch (e) { /* reader schema not applied yet — reader simply stays unavailable */ }
+    cacheReaderOffline();                          // keep a local copy so the reader works offline
+  } catch (e) { hydrateReaderCache(); /* offline or schema not applied — fall back to the cached copy */ }
+}
+
+// ---- offline cache of captured content + highlights ----
+function cacheReaderOffline() {
+  try { localStorage.setItem('pgp_reader_cache', JSON.stringify({ c: readingContent, b: readingContentById, h: highlightsByReading })); } catch (e) { /* quota — skip */ }
+}
+function hydrateReaderCache() {
+  if (Object.keys(readingContent).length) return;   // already have live data
+  try { const x = JSON.parse(localStorage.getItem('pgp_reader_cache') || 'null'); if (x) { readingContent = x.c || {}; readingContentById = x.b || {}; highlightsByReading = x.h || {}; } } catch (e) {}
 }
 
 function buildReadingIndex() {
   readingIndex = {};
   catalog.subjects.forEach(sub => sub.lus.forEach(lu => {
-    ['mandatory', 'recommended'].forEach(t => (lu[t] || []).forEach(r => readingIndex[r.id] = { name: r.name, lu: lu.title, subject: sub.name, luId: lu.id, subId: sub.id }));
-    (sharedReadings[lu.id] || []).forEach(r => readingIndex[r.id] = { name: r.name, lu: lu.title, subject: sub.name, luId: lu.id, subId: sub.id });
+    ['mandatory', 'recommended'].forEach(t => (lu[t] || []).forEach(r => { readingIndex[r.id] = { name: r.name, lu: lu.title, subject: sub.name, luId: lu.id, subId: sub.id }; readingObjs[r.id] = r; }));
+    (sharedReadings[lu.id] || []).forEach(r => { readingIndex[r.id] = { name: r.name, lu: lu.title, subject: sub.name, luId: lu.id, subId: sub.id }; readingObjs[r.id] = r; });
   }));
 }
 
@@ -1354,6 +1378,7 @@ function renderMain() {
   if (searchQuery) return renderSearch(panel);
   if (currentView === 'activity') return renderActivity(panel);
   if (currentView === 'people') return renderPeople(panel);
+  if (currentView === 'highlights') return renderHighlights(panel);
   if (!activeSubjectId) { panel.innerHTML = '<div class="empty"><h2>Select a subject</h2></div>'; return; }
   const subIdx = catalog.subjects.findIndex(s => s.id === activeSubjectId);
   const sub = catalog.subjects[subIdx];
@@ -1431,6 +1456,76 @@ function renderPeople(panel) {
       </div>
     </div>`).join('');
   panel.innerHTML = `<div class="panel-title">People</div><div class="panel-sub">${people.length} member${people.length === 1 ? '' : 's'} in the cohort.</div><div class="people-grid">${cards || '<div class="empty"><p>No one has signed in yet.</p></div>'}</div>`;
+}
+
+// ── My Highlights view ────────────────────────────────────────────────────────
+function myHighlightGroups() {
+  const me = currentUser && currentUser.id;
+  const groups = {};   // reading_id -> [highlights], newest first within
+  Object.keys(highlightsByReading).forEach(rId => {
+    (highlightsByReading[rId] || []).forEach(h => { if (h.user_id === me) (groups[rId] = groups[rId] || []).push(h); });
+  });
+  Object.values(groups).forEach(list => list.sort((a, b) => (a.start_off || 0) - (b.start_off || 0)));
+  // order readings by most-recent highlight
+  const order = Object.keys(groups).sort((a, b) => {
+    const la = Math.max(...groups[a].map(h => +new Date(h.created_at || 0)));
+    const lb = Math.max(...groups[b].map(h => +new Date(h.created_at || 0)));
+    return lb - la;
+  });
+  return { groups, order };
+}
+function renderHighlights(panel) {
+  if (!currentUser) {
+    panel.innerHTML = `<div class="empty"><h2>Highlights</h2><p><a onclick="showAuth()" style="cursor:pointer">Sign in</a> to collect everything you highlight across readings in one place.</p></div>`;
+    return;
+  }
+  const { groups, order } = myHighlightGroups();
+  const total = order.reduce((n, r) => n + groups[r].length, 0);
+  if (!total) {
+    panel.innerHTML = `<div class="panel-title">My Highlights</div><div class="panel-sub">Open a reading, select text, and your highlights gather here.</div><div class="empty"><p>No highlights yet.</p></div>`;
+    return;
+  }
+  const blocks = order.map(rId => {
+    const ri = readingIndex[rId] || { name: 'Reading', subject: '', lu: '' };
+    const rows = groups[rId].map(h => `<div class="hl-row" style="--ql:${h.color || hlAuthorColor(h)}">
+      <div class="q">${esc(h.quote || '')}</div>
+      ${h.note ? `<div class="n">${esc(h.note)}</div>` : ''}
+    </div>`).join('');
+    return `<div class="hl-group">
+      <div class="hl-group-head">
+        <span class="ttl">${esc(ri.name)}</span>
+        <span class="meta">${ri.subject ? esc(ri.subject) + ' · ' : ''}${groups[rId].length} highlight${groups[rId].length === 1 ? '' : 's'}</span>
+        <a class="open" onclick="openReader('${rId}')">Open in reader →</a>
+      </div>${rows}
+    </div>`;
+  }).join('');
+  panel.innerHTML = `<div class="panel-title">My Highlights</div>
+    <div class="panel-sub" style="display:flex;align-items:center;gap:12px">
+      <span>${total} highlight${total === 1 ? '' : 's'} across ${order.length} reading${order.length === 1 ? '' : 's'}.</span>
+      <a onclick="exportHighlights()" style="color:var(--brand-ink);cursor:pointer;font-weight:600">Export Markdown ↓</a>
+    </div>${blocks}`;
+}
+function exportHighlights() {
+  const { groups, order } = myHighlightGroups();
+  let md = `# My Highlights — PGP Reading Tracker\n\n`;
+  order.forEach(rId => {
+    const ri = readingIndex[rId] || { name: 'Reading', subject: '', lu: '' };
+    md += `## ${ri.name}\n`;
+    if (ri.subject || ri.lu) md += `*${[ri.subject, (ri.lu || '').replace(/:.*/, '')].filter(Boolean).join(' · ')}*\n`;
+    const r = readingObjs[rId]; if (r && r.url) md += `<${r.url}>\n`;
+    md += `\n`;
+    groups[rId].forEach(h => {
+      md += `> ${(h.quote || '').replace(/\n+/g, ' ')}\n`;
+      if (h.note) md += `\n  — ${h.note.replace(/\n+/g, ' ')}\n`;
+      md += `\n`;
+    });
+  });
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'pgp-highlights.md';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 // ── Search ────────────────────────────────────────────────────────────────────
@@ -1990,8 +2085,8 @@ function pageForOffset(map, off) { for (const m of (map || [])) if (off >= m.sta
 
 // ---- reader preferences (font / width / theme) ----
 function readerPrefs() {
-  try { return Object.assign({ fs: 'm', w: 'med', theme: 'light' }, JSON.parse(localStorage.getItem('pgp_reader_prefs') || '{}')); }
-  catch (e) { return { fs: 'm', w: 'med', theme: 'light' }; }
+  try { return Object.assign({ fs: 'm', w: 'med', theme: 'light', font: 'sans' }, JSON.parse(localStorage.getItem('pgp_reader_prefs') || '{}')); }
+  catch (e) { return { fs: 'm', w: 'med', theme: 'light', font: 'sans' }; }
 }
 function saveReaderPrefs(p) { try { localStorage.setItem('pgp_reader_prefs', JSON.stringify(p)); } catch (e) {} }
 function applyReaderPrefs() {
@@ -1999,13 +2094,27 @@ function applyReaderPrefs() {
   const p = readerPrefs(), body = ov.querySelector('.reader-body'), col = ov.querySelector('.reader-col');
   ov.classList.toggle('theme-sepia', p.theme === 'sepia');
   ov.classList.toggle('theme-dark', p.theme === 'dark');
-  if (body) { body.classList.remove('fs-s', 'fs-l', 'fs-xl'); if (p.fs !== 'm') body.classList.add('fs-' + p.fs); }
+  if (body) { body.classList.remove('fs-s', 'fs-l', 'fs-xl'); if (p.fs !== 'm') body.classList.add('fs-' + p.fs); body.classList.toggle('font-serif', p.font === 'serif'); }
   if (col) { col.classList.remove('w-narrow', 'w-wide'); if (p.w === 'narrow') col.classList.add('w-narrow'); if (p.w === 'wide') col.classList.add('w-wide'); }
   ov.querySelectorAll('[data-theme]').forEach(b => b.classList.toggle('on', b.dataset.theme === p.theme));
+  const fb = ov.querySelector('[data-font]'); if (fb) fb.classList.toggle('on', p.font === 'serif');
 }
 function setReaderPref(k, v) { const p = readerPrefs(); p[k] = v; saveReaderPrefs(p); applyReaderPrefs(); }
 function cycleFont(dir) { const o = ['s', 'm', 'l', 'xl'], p = readerPrefs(); let i = o.indexOf(p.fs); i = Math.max(0, Math.min(o.length - 1, i + dir)); setReaderPref('fs', o[i]); }
 function cycleWidth() { const o = ['narrow', 'med', 'wide'], p = readerPrefs(); let i = (o.indexOf(p.w) + 1) % o.length; setReaderPref('w', o[i]); }
+function toggleSerif() { setReaderPref('font', readerPrefs().font === 'serif' ? 'sans' : 'serif'); }
+function readingMinutes(rc) { if (!rc || !rc.content_html) return 0; const w = rc.content_html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean).length; return Math.max(1, Math.round(w / 220)); }
+
+// ---- resume reading position (per reading) ----
+let _readerPosT = null;
+function getReaderPos(rId) { try { return (JSON.parse(localStorage.getItem('pgp_reader_pos') || '{}'))[rId] || 0; } catch (e) { return 0; } }
+function saveReaderPos(rId, ratio) { try { const m = JSON.parse(localStorage.getItem('pgp_reader_pos') || '{}'); m[rId] = ratio; localStorage.setItem('pgp_reader_pos', JSON.stringify(m)); } catch (e) {} }
+function onReaderScroll() {
+  const sc = document.querySelector('.reader-scroll'); if (!sc || !curReader) return;
+  const max = sc.scrollHeight - sc.clientHeight, ratio = max > 0 ? sc.scrollTop / max : 0;
+  const f = document.getElementById('readerProg'); if (f) f.style.width = (ratio * 100).toFixed(1) + '%';
+  clearTimeout(_readerPosT); _readerPosT = setTimeout(() => saveReaderPos(curReader.rId, ratio), 250);
+}
 
 // ---- original-source links ----
 function sourceLinks(rc, reading, hl) {
@@ -2035,6 +2144,7 @@ function openReader(rId) {
   const bodyHtml = m.mode === 'video'
     ? `<div class="video-wrap"><iframe src="${esc(m.src)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`
     : (m.rc.content_html || '');
+  const mins = m.mode === 'text' ? readingMinutes(m.rc) : 0;
   ov.innerHTML = `
     <div class="reader-topbar">
       <button class="rt-close" onclick="closeReader()" aria-label="Close reader">✕</button>
@@ -2042,16 +2152,19 @@ function openReader(rId) {
       <div class="reader-controls">
         <button onclick="cycleFont(-1)" aria-label="Smaller text" title="Smaller text">A−</button>
         <button onclick="cycleFont(1)" aria-label="Larger text" title="Larger text">A+</button>
+        <button data-font onclick="toggleSerif()" title="Serif / sans-serif" style="font-family:Georgia,serif">Aa</button>
         <button onclick="cycleWidth()" aria-label="Column width" title="Column width">↔</button>
         <button data-theme="light" onclick="setReaderPref('theme','light')" title="Light">☀</button>
         <button data-theme="sepia" onclick="setReaderPref('theme','sepia')" title="Sepia">◐</button>
         <button data-theme="dark" onclick="setReaderPref('theme','dark')" title="Dark">☾</button>
       </div>
+      <div class="reader-progress" id="readerProg"></div>
     </div>
     <div class="reader-scroll">
       <div class="reader-col">
         ${sourceBar(m.rc, r)}
         <h1 class="reader-title">${esc((m.rc && m.rc.title) || r.name || '')}</h1>
+        ${mins ? `<div class="reader-time">${mins} min read</div>` : ''}
         <div class="reader-body" id="readerBody">${bodyHtml}</div>
         ${m.mode === 'text' ? '<div class="reader-hint">Select any text to highlight it. Tap a highlight to see who marked it and read notes.</div>' : ''}
       </div>
@@ -2060,6 +2173,13 @@ function openReader(rId) {
   document.body.style.overflow = 'hidden';
   applyReaderPrefs();
   if (m.mode === 'text') { paintHighlights(rId); wireReaderBody(); }
+  // resume scroll position + drive the progress bar
+  const sc = ov.querySelector('.reader-scroll');
+  sc.addEventListener('scroll', onReaderScroll, { passive: true });
+  const ratio = getReaderPos(rId);
+  const restore = () => { const max = sc.scrollHeight - sc.clientHeight; if (ratio > 0.01 && max > 0) sc.scrollTop = ratio * max; onReaderScroll(); };
+  restore();                          // synchronous — layout is ready, reliable
+  requestAnimationFrame(restore);     // re-apply after any late layout (images/fonts)
 }
 function closeReader() {
   const ov = document.getElementById('readerOverlay');
@@ -2110,7 +2230,10 @@ function tint(hex, a) { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) 
 function wireReaderBody() {
   const body = document.getElementById('readerBody'); if (!body || body.dataset.wired) return;
   body.dataset.wired = '1';
-  body.addEventListener('click', e => { const mk = e.target.closest('mark.hl'); if (mk) { e.stopPropagation(); openHlSheet(mk.dataset.ids.split(',')); } });
+  body.addEventListener('click', e => {
+    const mk = e.target.closest('mark.hl'); if (mk) { e.stopPropagation(); openHlSheet(mk.dataset.ids.split(',')); return; }
+    const a = e.target.closest('a[href]'); if (a) { e.preventDefault(); window.open(a.href, '_blank', 'noopener'); }   // in-article links open out, never hijack the reader
+  });
   const onSel = () => setTimeout(showHlToolsForSelection, 10);
   body.addEventListener('mouseup', onSel);
   body.addEventListener('touchend', onSel);
