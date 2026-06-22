@@ -344,6 +344,16 @@
   .person-hero { display: flex; align-items: center; gap: 16px; margin: 12px 0 2px; }
   .person-hero-name { font-family: var(--display); font-weight: 800; font-size: 1.5rem; letter-spacing: -.02em; line-height: 1.15; }
   .person-hero-sub { font-size: .82rem; color: var(--muted); margin: 4px 0 3px; }
+  /* bottom tab bar (installed-app navigation; mobile only) */
+  .bottom-nav { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 150; background: var(--surface); border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom); box-shadow: 0 -2px 14px rgba(0,0,0,.07); }
+  .bottom-nav button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; background: none; border: none; color: var(--muted); font-family: inherit; font-size: .64rem; font-weight: 650; padding: 9px 2px 7px; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: color .12s; }
+  .bottom-nav button svg { width: 23px; height: 23px; }
+  .bottom-nav button.on { color: var(--brand-ink); }
+  @media (max-width: 820px) {
+    .bottom-nav { display: flex; }
+    .sidebar .nav-item { display: none; }              /* primary nav moves to the bottom bar */
+    .main { padding-bottom: calc(74px + env(safe-area-inset-bottom)); }
+  }
 
   /* ── READER + HIGHLIGHTS ─────────────────────────────────────────── */
   .reader-link { cursor: pointer; }
@@ -443,6 +453,12 @@
 <div class="hl-tools" id="hlTools"></div>
 <div class="hl-sheet" id="hlSheet"></div>
 <div class="font-menu" id="fontMenu"></div>
+<nav class="bottom-nav" id="bottomNav" aria-label="Primary">
+  <button data-bnav="readings" onclick="setView('readings')" aria-label="Readings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5A1.5 1.5 0 0 1 4.5 4H11v16H4.5A1.5 1.5 0 0 0 3 21.5z"/><path d="M21 5.5A1.5 1.5 0 0 0 19.5 4H13v16h6.5A1.5 1.5 0 0 1 21 21.5z"/></svg><span>Readings</span></button>
+  <button data-bnav="activity" onclick="setView('activity')" aria-label="Activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5 7 5-15 2.5 8H21"/></svg><span>Activity</span></button>
+  <button data-bnav="people" onclick="setView('people')" aria-label="People"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 4.2a3.2 3.2 0 0 1 0 6"/><path d="M21 20a5.5 5.5 0 0 0-4.6-5.4"/></svg><span>People</span></button>
+  <button data-bnav="highlights" onclick="setView('highlights')" aria-label="Highlights"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="m6 16 9-9 3 3-9 9H6z"/></svg><span>Highlights</span></button>
+</nav>
 <header>
   <div class="hdr-brand">
     <h1><img src="icons/favicon-32.png" class="brand-mark" alt="">PGP Reading Tracker</h1>
@@ -1441,6 +1457,9 @@ function applyViewChrome() {
   const h = document.getElementById('subjectsHeading'); if (h) h.style.display = onReadings ? '' : 'none';
   const st = document.getElementById('subjectTabs'); if (st) st.style.display = onReadings ? '' : 'none';
   const at = document.getElementById('adminTools'); if (at) at.style.display = (onReadings && isAdmin) ? '' : 'none';
+  // sync the bottom tab bar's active item
+  const navView = currentView === 'person' ? 'people' : (searchQuery ? 'readings' : currentView);
+  ['readings', 'activity', 'people', 'highlights'].forEach(n => { const b = document.querySelector('.bottom-nav [data-bnav="' + n + '"]'); if (b) b.classList.toggle('on', n === navView); });
 }
 function renderMain() {
   applyViewChrome();
