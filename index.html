@@ -1155,11 +1155,14 @@ async function loadSocial() {
     const hidden = new Set(Object.keys(profiles).filter(u => profiles[u].hidden));
     readingContent = {}; readingContentById = {};
     (rcd.data || []).forEach(c => { if (c.url) readingContent[normUrl(c.url)] = c; if (c.reading_id) readingContentById[c.reading_id] = c; });
-    highlightsByReading = {}; const hlActs = [];
+    highlightsByReading = {}; const hlActs = []; const hlSeen = new Set();
     (hl.data || []).forEach(h => {
       const u = h.user_id;
       if (hidden.has(u)) return;
       if (pvNoHL.has(u) && u !== me) return;        // others' hidden highlights; keep my own (for reader + My Highlights)
+      const dk = u + '|' + h.reading_id + '|' + h.start_off + '|' + h.end_off;
+      if (hlSeen.has(dk)) return;                    // collapse duplicate rows (same span, same person)
+      hlSeen.add(dk);
       (highlightsByReading[h.reading_id] = highlightsByReading[h.reading_id] || []).push(h);
       if (!pvNoHL.has(u) && h.created_at) hlActs.push({ kind: 'highlight', user_id: u, reading_id: h.reading_id, quote: h.quote, at: h.created_at });
     });
@@ -1486,14 +1489,14 @@ function renderActivity(panel) {
     const ri = readingIndex[a.reading_id]; if (!ri) return;
     const dl = dayLabel(a.at);
     if (dl !== lastDay) { lastDay = dl; parts.push(`<div class="day-break">${dl}</div>`); }
-    const who = `<b>${esc(nameOf(a.user_id))}</b>${testTag(a.user_id)}`;
+    const who = `<b class="meta-link" onclick="goToPerson('${a.user_id}')" style="color:var(--text);cursor:pointer">${esc(nameOf(a.user_id))}</b>${testTag(a.user_id)}`;
     const where = `<a class="meta-link" onclick="goToReading('${a.reading_id}')">${esc(ri.name)}</a>`;
     const body = a.kind === 'done'
       ? `${who} completed ${where}`
       : a.kind === 'highlight'
         ? `${who} highlighted in ${where}<div style="color:var(--muted);margin-top:3px">“${esc((a.quote || '').slice(0, 160))}”</div>`
         : `${who} commented on ${where}<div style="color:var(--muted);margin-top:3px">“${esc(a.body)}”</div>`;
-    parts.push(`<div class="feed-item">${avatarHTML(a.user_id, 30)}<div style="flex:1;min-width:0"><div class="feed-body">${body}</div><div class="feed-time">${esc(ri.subject)} · ${ri.lu.replace(/:.*/, '')} · ${timeAgo(a.at)}</div></div></div>`);
+    parts.push(`<div class="feed-item"><span onclick="goToPerson('${a.user_id}')" style="cursor:pointer;flex-shrink:0">${avatarHTML(a.user_id, 30)}</span><div style="flex:1;min-width:0"><div class="feed-body">${body}</div><div class="feed-time">${esc(ri.subject)} · ${ri.lu.replace(/:.*/, '')} · ${timeAgo(a.at)}</div></div></div>`);
   });
   panel.innerHTML = `<div class="panel-title">Recent activity</div><div class="panel-sub">Completions and discussions across the cohort.</div>${parts.length ? parts.join('') : '<div class="empty"><p>No activity yet — be the first to tick a reading or start a discussion.</p></div>'}`;
 }
@@ -2498,8 +2501,10 @@ function toggleHlMode() { hlMode = !hlMode; const b = document.querySelector('[d
 async function createHighlight(start, end, quote, color) {
   hideHlTools(); const sel = window.getSelection(); if (sel) sel.removeAllRanges();
   if (!currentUser || !curReader || !sb) return;
-  const p = readerPrefs(); p.hlColor = color; saveReaderPrefs(p);   // remember last colour for highlighter mode
   const rId = curReader.rId, rc = curReader.rc;
+  // guard against double-fire (mouseup + touchend) creating the same highlight twice
+  if ((highlightsByReading[rId] || []).some(h => h.user_id === currentUser.id && h.start_off === start && h.end_off === end)) return;
+  const p = readerPrefs(); p.hlColor = color; saveReaderPrefs(p);   // remember last colour for highlighter mode
   const page = rc && rc.page_map ? pageForOffset(rc.page_map, start) : null;
   const row = { reading_id: rId, user_id: currentUser.id, start_off: start, end_off: end, quote: (quote || '').slice(0, 2000), color, page };
   const tmpId = 'tmp_' + Date.now();
