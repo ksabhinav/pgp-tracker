@@ -91,7 +91,7 @@
   .main { flex: 1; min-width: 0; padding: 22px 28px 60px; max-width: var(--maxw); margin: 0 auto; }
   .subject-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
   .subject-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; font-weight: 700; color: white; flex-shrink: 0; }
-  .subject-name { font-size: 1.4rem; font-weight: 750; letter-spacing: -.02em; }
+  .subject-name { font-size: 1.4rem; font-weight: 750; letter-spacing: -.02em; overflow-wrap: break-word; }
   .subject-code { font-size: .8rem; color: var(--muted); margin-top: 1px; }
   .subject-pct-big { margin-left: auto; font-size: 1.9rem; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
   .subject-bar { height: 8px; background: var(--border); border-radius: 99px; margin-bottom: 22px; overflow: hidden; }
@@ -112,7 +112,7 @@
   .lu-card.open { border-color: var(--brand-soft); }
   .lu-header { display: flex; align-items: center; gap: 13px; padding: 15px 18px; cursor: pointer; user-select: none; }
   .lu-num { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: .78rem; font-weight: 700; color: white; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-  .lu-title { font-size: .94rem; font-weight: 650; flex: 1; letter-spacing: -.01em; }
+  .lu-title { font-size: .94rem; font-weight: 650; flex: 1; min-width: 0; letter-spacing: -.01em; overflow-wrap: break-word; }
   .lu-tag { font-size: .64rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-left: 6px; background: var(--gold-soft); color: var(--gold); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; flex-shrink: 0; }
   .lu-progress { display: flex; align-items: center; gap: 10px; margin-left: auto; }
   .lu-pct { font-size: .82rem; font-weight: 700; min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -135,12 +135,12 @@
   .reading-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--hair); }
   .reading-item:last-child { border-bottom: none; }
   .reading-item input[type=checkbox] { margin-top: 2px; flex-shrink: 0; width: 18px; height: 18px; accent-color: var(--brand); cursor: pointer; }
-  .reading-name { font-weight: 600; color: var(--text); font-size: .88rem; line-height: 1.4; }
+  .reading-name { font-weight: 600; color: var(--text); font-size: .88rem; line-height: 1.4; overflow-wrap: break-word; }
   a.reading-name { color: var(--text); text-decoration: none; transition: color .12s; }
   a.reading-name:hover { color: var(--brand-ink); }
-  .ext { font-size: .68em; color: var(--faint); margin-left: 4px; vertical-align: 1px; transition: color .12s; }
+  .ext { font-size: .68em; color: var(--faint); margin-left: 4px; vertical-align: 1px; transition: color .12s; white-space: nowrap; }
   a.reading-name:hover .ext { color: var(--brand-ink); }
-  .reading-desc { color: var(--muted); font-size: .76rem; display: block; margin-top: 2px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .reading-desc { color: var(--muted); font-size: .76rem; display: block; margin-top: 2px; line-height: 1.4; overflow-wrap: break-word; }
   .reading-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 7px; }
   .reading-meta .meta-link { font-size: .72rem; color: var(--brand-ink); cursor: pointer; font-weight: 600; }
   .avstack { display: inline-flex; align-items: center; }
