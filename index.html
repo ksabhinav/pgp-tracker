@@ -419,9 +419,7 @@
   .hl-quote { font-size: .86rem; line-height: 1.5; border-left: 3px solid var(--ql, #ccc); padding-left: 11px; color: var(--text); margin: 5px 0 7px; }
   .hl-note { font-size: .84rem; color: var(--muted); white-space: pre-wrap; line-height: 1.45; }
   .hl-swatch { width: 19px; height: 19px; border-radius: 50%; cursor: pointer; box-shadow: inset 0 0 0 2px transparent; }
-  .hl-fab { position: fixed; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 318; width: 50px; height: 50px; border-radius: 50%; border: none; background: var(--surface); color: var(--brand); box-shadow: 0 6px 20px rgba(0,0,0,.28); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s, color .15s, transform .12s; }
-  .hl-fab:active { transform: scale(.94); }
-  .hl-fab.on { background: var(--brand); color: #fff; }
+  .reader-controls button[data-hl] svg { display: block; }
   /* My Highlights view */
   .hl-group { margin-bottom: 22px; }
   .hl-group-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
@@ -2187,12 +2185,14 @@ function applyReaderPrefs() {
   ov.classList.toggle('theme-dark', p.theme === 'dark');
   if (body) { body.classList.remove('fs-s', 'fs-l', 'fs-xl'); if (p.fs !== 'm') body.classList.add('fs-' + p.fs); body.style.setProperty('--reader-font', fontCss(p.font)); }
   if (col) { col.classList.remove('w-narrow', 'w-wide'); if (p.w === 'narrow') col.classList.add('w-narrow'); if (p.w === 'wide') col.classList.add('w-wide'); }
-  ov.querySelectorAll('[data-theme]').forEach(b => b.classList.toggle('on', b.dataset.theme === p.theme));
+  const tc = ov.querySelector('[data-theme-cycle]'); if (tc) { tc.textContent = themeGlyph(p.theme); tc.classList.toggle('on', p.theme !== 'light'); }
   const fb = ov.querySelector('[data-font]'); if (fb) fb.classList.toggle('on', p.font !== 'sans');
 }
 function setReaderPref(k, v) { const p = readerPrefs(); p[k] = v; saveReaderPrefs(p); applyReaderPrefs(); }
 function cycleFont(dir) { const o = ['s', 'm', 'l', 'xl'], p = readerPrefs(); let i = o.indexOf(p.fs); i = Math.max(0, Math.min(o.length - 1, i + dir)); setReaderPref('fs', o[i]); }
 function cycleWidth() { const o = ['narrow', 'med', 'wide'], p = readerPrefs(); let i = (o.indexOf(p.w) + 1) % o.length; setReaderPref('w', o[i]); }
+function cycleTheme() { const o = ['light', 'sepia', 'dark'], p = readerPrefs(); let i = (o.indexOf(p.theme) + 1) % o.length; setReaderPref('theme', o[i]); }
+function themeGlyph(t) { return t === 'dark' ? '☾' : t === 'sepia' ? '◐' : '☀'; }
 
 // ---- font family picker ----
 const FONT_OPTS = [
@@ -2275,9 +2275,8 @@ function openReader(rId) {
         <button onclick="cycleFont(1)" aria-label="Larger text" title="Larger text">A+</button>
         <button data-font onclick="toggleFontMenu(this)" title="Reading font" style="font-family:Georgia,serif">Aa</button>
         <button onclick="cycleWidth()" aria-label="Column width" title="Column width">↔</button>
-        <button data-theme="light" onclick="setReaderPref('theme','light')" title="Light">☀</button>
-        <button data-theme="sepia" onclick="setReaderPref('theme','sepia')" title="Sepia">◐</button>
-        <button data-theme="dark" onclick="setReaderPref('theme','dark')" title="Dark">☾</button>
+        <button data-theme-cycle onclick="cycleTheme()" aria-label="Theme" title="Theme: light / sepia / dark">☀</button>
+        ${m.mode === 'text' && currentUser ? `<button data-hl onclick="toggleHlMode()" aria-label="Highlighter" title="Highlighter — turn on, then select text to mark it instantly">${markerIcon(15)}</button>` : ''}
       </div>
       <div class="reader-progress" id="readerProg"></div>
     </div>
@@ -2287,10 +2286,9 @@ function openReader(rId) {
         <h1 class="reader-title">${esc((m.rc && m.rc.title) || r.name || '')}</h1>
         ${mins ? `<div class="reader-time">${mins} min read</div>` : ''}
         <div class="reader-body" id="readerBody">${bodyHtml}</div>
-        ${m.mode === 'text' ? '<div class="reader-hint">Select text to highlight it (or tap the pen, then select to mark instantly). Tap a highlight to read & discuss it.</div>' : ''}
+        ${m.mode === 'text' ? '<div class="reader-hint">Select text to highlight it. Turn on the highlighter (top bar) to mark instantly while you read. Tap a highlight to read & discuss it.</div>' : ''}
       </div>
-    </div>
-    ${m.mode === 'text' && currentUser ? `<button class="hl-fab" id="hlFab" onclick="toggleHlMode()" aria-label="Highlighter" title="Highlighter — tap, then select text to mark it instantly">${markerIcon()}</button>` : ''}`;
+    </div>`;
   ov.classList.add('open'); ov.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
   hlMode = false;
@@ -2379,8 +2377,8 @@ function showHlToolsForSelection() {
   tools.classList.add('open');
 }
 function hideHlTools() { const t = document.getElementById('hlTools'); if (t) t.classList.remove('open'); }
-function markerIcon() { return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>'; }
-function toggleHlMode() { hlMode = !hlMode; const f = document.getElementById('hlFab'); if (f) f.classList.toggle('on', hlMode); hideHlTools(); }
+function markerIcon(px) { px = px || 15; return `<svg width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="m6 16 9-9 3 3-9 9H6z"/></svg>`; }
+function toggleHlMode() { hlMode = !hlMode; const b = document.querySelector('[data-hl]'); if (b) b.classList.toggle('on', hlMode); hideHlTools(); }
 
 async function createHighlight(start, end, quote, color) {
   hideHlTools(); const sel = window.getSelection(); if (sel) sel.removeAllRanges();
