@@ -340,6 +340,7 @@
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><filter id="clip-rough"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="6" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="0.9"/></filter></defs></svg>
 <header>
   <div class="hdr-brand">
     <h1><img src="icons/favicon-32.png" class="brand-mark" alt="">PGP Reading Tracker</h1>
@@ -1049,6 +1050,8 @@ function isAvatarId(x) { return x && /^a\d\d$/.test(x); }
 const AVATAR_IDS = Array.from({ length: 40 }, (_, i) => 'a' + String(i + 1).padStart(2, '0'));
 const AV_VER = '4';   // bump when avatar art changes, to bust caches
 function avatarSrc(id) { return `avatars/${id}.svg?v=${AV_VER}`; }
+// hand-drawn paperclip (inherits text colour, subtle sketch wobble)
+function clipIcon(px) { px = px || 14; return `<svg viewBox="0 0 24 24" width="${px}" height="${px}" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" filter="url(#clip-rough)" style="vertical-align:-2px;flex-shrink:0"><path d="M21.2 11.1l-9.1 9.1a5.8 5.8 0 0 1-8.2-8.2l9.1-9.1a3.9 3.9 0 0 1 5.5 5.5l-9.1 9.1a1.9 1.9 0 0 1-2.7-2.7l8.2-8.2"/></svg>`; }
 function avatarHTML(uid, size) {
   const p = profiles[uid] || {}; const s = size || 24;
   const name = p.name || 'Member';
@@ -1121,7 +1124,7 @@ async function attachCommentPDF(rId, inputEl) {
   const up = await uploadPDF(file); if (!up) return;
   cmtAttach[rId] = up;
   const el = document.getElementById('cmtAtt_' + rId);
-  if (el) el.innerHTML = `<span style="font-size:.74rem;color:var(--muted)">📎 ${esc(up.name)} <a onclick="delete cmtAttach['${rId}'];document.getElementById('cmtAtt_${rId}').innerHTML=''" style="cursor:pointer;color:var(--brand-ink)">remove</a></span>`;
+  if (el) el.innerHTML = `<span style="font-size:.74rem;color:var(--muted);display:inline-flex;align-items:center;gap:4px">${clipIcon(13)} ${esc(up.name)} <a onclick="delete cmtAttach['${rId}'];document.getElementById('cmtAtt_${rId}').innerHTML=''" style="cursor:pointer;color:var(--brand-ink)">remove</a></span>`;
 }
 
 async function addComment(rId) {
@@ -1367,7 +1370,7 @@ function renderLUCard(lu, color) {
         ${luReadings(lu, 'recommended').map(r => readingItem(r, lu.url)).join('')}
       </div>
       ${renderSuggested(lu)}
-      ${lu.url ? `<div style="padding:8px 18px 12px;text-align:right"><a href="${esc(lu.url)}" target="_blank" rel="noopener" title="Open on OpenTakshashila" style="font-size:.78rem;color:var(--brand-ink);text-decoration:none;font-weight:600">🔗 Open on OT →</a></div>` : ''}
+      ${lu.url ? `<div style="padding:8px 18px 12px;text-align:right"><a href="${esc(lu.url)}" target="_blank" rel="noopener" title="Open on OpenTakshashila" style="font-size:.78rem;color:var(--brand-ink);text-decoration:none;font-weight:600">Open on OT →</a></div>` : ''}
     </div>
   </div>`;
 }
@@ -1379,7 +1382,7 @@ function renderSuggested(lu) {
   const adder = currentUser
     ? `<div class="add-row">
         <input id="newSug_${lu.id}" placeholder="Suggest a reading (title or link)…" onkeydown="if(event.key==='Enter')addSuggested('${lu.id}')">
-        <label class="attach-btn" title="Attach a PDF">📎<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="attachSuggestedPDF('${lu.id}', this)"></label>
+        <label class="attach-btn" title="Attach a PDF">${clipIcon(16)}<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="attachSuggestedPDF('${lu.id}', this)"></label>
         <button onclick="addSuggested('${lu.id}')">Suggest</button>
       </div>`
     : `<div style="font-size:.76rem;color:var(--faint);margin-top:8px"><a onclick="showAuth()" style="cursor:pointer;color:var(--brand-ink)">Sign in</a> to suggest a reading.</div>`;
@@ -1435,13 +1438,13 @@ function renderThread(rId, cmts) {
     <div style="flex:1;min-width:0">
       <div style="font-size:.72rem;color:var(--faint)"><b style="color:var(--text)">${esc(nameOf(c.user_id))}</b>${testTag(c.user_id)} · ${timeAgo(c.created_at)}${c.user_id === mine ? ` · <a onclick="deleteComment('${c.id}','${rId}')" style="color:var(--brand-ink);cursor:pointer">delete</a>` : ''}</div>
       ${c.body ? `<div style="font-size:.84rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;color:var(--text)">${esc(c.body)}</div>` : ''}
-      ${c.attachment ? `<a href="${esc(c.attachment)}" target="_blank" rel="noopener" class="pdf-chip">📎 PDF</a>` : ''}
+      ${c.attachment ? `<a href="${esc(c.attachment)}" target="_blank" rel="noopener" class="pdf-chip">${clipIcon(13)} PDF</a>` : ''}
     </div>
   </div>`).join('') || '<div style="font-size:.78rem;color:var(--faint);padding:4px 0">No comments yet — start the discussion.</div>';
   const box = currentUser
     ? `<div style="display:flex;gap:6px;margin-top:8px">
         <input id="cmt_${rId}" placeholder="Add a comment…" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:.82rem;outline:none;background:var(--surface);color:var(--text);font-family:inherit" onkeydown="if(event.key==='Enter')addComment('${rId}')">
-        <label class="attach-btn" title="Attach a PDF">📎<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="attachCommentPDF('${rId}', this)"></label>
+        <label class="attach-btn" title="Attach a PDF">${clipIcon(16)}<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="attachCommentPDF('${rId}', this)"></label>
         <button onclick="addComment('${rId}')" style="padding:7px 13px;background:var(--brand);color:var(--on-brand);border:none;border-radius:8px;font-size:.8rem;cursor:pointer;font-weight:600;font-family:inherit">Post</button>
       </div><div id="cmtAtt_${rId}" style="margin-top:5px"></div>`
     : `<div style="font-size:.76rem;color:var(--faint);margin-top:4px"><a onclick="showAuth()" style="color:var(--brand-ink);cursor:pointer">Sign in</a> to join the discussion.</div>`;
