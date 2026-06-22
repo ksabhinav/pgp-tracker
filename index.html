@@ -337,10 +337,79 @@
   .day-break { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--faint); margin: 22px 0 4px; padding-bottom: 5px; border-bottom: 1px solid var(--hair); }
   .day-break:first-child { margin-top: 0; }
   .test-tag { display: inline-block; font-size: .58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gold); background: var(--gold-soft); padding: 1px 6px; border-radius: 99px; margin-left: 5px; vertical-align: middle; }
+
+  /* ── READER + HIGHLIGHTS ─────────────────────────────────────────── */
+  .reader-link { cursor: pointer; }
+  .reader-ext { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--brand-ink); background: var(--brand-soft); padding: 1px 6px; border-radius: 99px; margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
+  .src-mini { font-size: .68rem; color: var(--faint); margin-left: 8px; text-decoration: none; white-space: nowrap; }
+  .src-mini:hover { color: var(--brand-ink); }
+
+  .reader-overlay { position: fixed; inset: 0; z-index: 300; background: var(--reader-bg, #fbfaf7); color: var(--reader-fg, #1c1b19); display: none; flex-direction: column; }
+  .reader-overlay.open { display: flex; animation: rise .22s var(--ease); }
+  .reader-overlay.theme-sepia { --reader-bg: #f4ecd8; --reader-fg: #43381f; }
+  .reader-overlay.theme-dark  { --reader-bg: #16131a; --reader-fg: #e7e2ec; }
+  .reader-topbar { display: flex; align-items: center; gap: 8px; padding: calc(9px + env(safe-area-inset-top)) 12px 9px; border-bottom: 1px solid rgba(128,128,128,.16); background: inherit; flex-shrink: 0; }
+  .reader-topbar .rt-close { background: none; border: none; font-size: 1.25rem; line-height: 1; cursor: pointer; color: inherit; padding: 4px 9px; border-radius: 8px; }
+  .reader-topbar .rt-close:hover { background: rgba(128,128,128,.14); }
+  .reader-topbar .rt-name { font-size: .8rem; opacity: .6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .reader-controls { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+  .reader-controls button { background: rgba(128,128,128,.12); border: none; color: inherit; border-radius: 8px; padding: 5px 9px; font-size: .78rem; cursor: pointer; font-family: inherit; font-weight: 650; line-height: 1; }
+  .reader-controls button:hover { background: rgba(128,128,128,.22); }
+  .reader-controls button.on { background: var(--brand); color: #fff; }
+  .reader-scroll { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; }
+  .reader-col { max-width: var(--reader-w, 680px); margin: 0 auto; padding: 24px 22px 140px; }
+  .reader-col.w-narrow { --reader-w: 560px; }
+  .reader-col.w-wide   { --reader-w: 840px; }
+  .reader-title { font-family: var(--display); font-weight: 800; letter-spacing: -.02em; font-size: 1.7rem; line-height: 1.2; margin: 14px 0 18px; overflow-wrap: break-word; }
+  .reader-body { font-size: var(--reader-fs, 1.06rem); line-height: 1.72; }
+  .reader-body.fs-s  { --reader-fs: .96rem; }
+  .reader-body.fs-l  { --reader-fs: 1.2rem; }
+  .reader-body.fs-xl { --reader-fs: 1.38rem; }
+  .reader-body p { margin: 0 0 1.1em; overflow-wrap: break-word; }
+  .reader-body h1, .reader-body h2, .reader-body h3, .reader-body h4 { font-family: var(--display); line-height: 1.3; margin: 1.5em 0 .5em; }
+  .reader-body img { max-width: 100%; height: auto; border-radius: 8px; }
+  .reader-body figure { margin: 1.2em 0; }
+  .reader-body blockquote { border-left: 3px solid var(--brand-soft); margin: 1.2em 0; padding-left: 16px; color: var(--reader-fg); opacity: .85; }
+  .reader-body a { color: var(--brand-ink); }
+  .reader-body section[data-page] + section[data-page] { margin-top: 1.4em; }
+  .video-wrap { position: relative; width: 100%; aspect-ratio: 16/9; margin: 6px 0 20px; border-radius: 12px; overflow: hidden; background: #000; }
+  .video-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .source-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 12px; font-size: .78rem; padding: 9px 12px; background: rgba(128,128,128,.08); border-radius: 10px; margin-bottom: 4px; }
+  .source-bar .src-dom { opacity: .6; }
+  .source-bar a { color: var(--brand-ink); font-weight: 650; text-decoration: none; white-space: nowrap; }
+  .source-bar a:hover { text-decoration: underline; }
+  .reader-hint { margin-top: 32px; font-size: .76rem; opacity: .45; }
+
+  /* highlight marks */
+  .reader-body mark.hl { background: transparent; color: inherit; cursor: pointer; border-radius: 2px; -webkit-tap-highlight-color: transparent; }
+  .reader-body mark.hl.mine { background: var(--hl-fill, rgba(255,214,107,.5)); }
+  .reader-body mark.hl.theirs { background: transparent; border-bottom: 2px solid var(--hl-line, #888); }
+  .reader-body mark.hl.both { background: var(--hl-fill, rgba(255,214,107,.5)); border-bottom: 2px solid var(--hl-line, #888); }
+
+  /* selection mini-toolbar */
+  .hl-tools { position: fixed; z-index: 320; transform: translate(-50%, -120%); background: #1c1b19; border-radius: 11px; padding: 7px 9px; display: none; align-items: center; gap: 7px; box-shadow: 0 8px 26px rgba(0,0,0,.4); }
+  .hl-tools.open { display: flex; }
+  .hl-tools .sw { width: 21px; height: 21px; border-radius: 50%; border: 2px solid rgba(255,255,255,.55); cursor: pointer; transition: transform .12s; }
+  .hl-tools .sw:hover { transform: scale(1.18); }
+
+  /* bottom sheet (who highlighted + notes) */
+  .hl-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 330; background: var(--surface); color: var(--text); border-top: 1px solid var(--border); border-radius: 16px 16px 0 0; box-shadow: 0 -10px 44px rgba(0,0,0,.32); transform: translateY(105%); transition: transform .26s var(--ease); max-height: 76vh; overflow: auto; padding: 12px 16px calc(18px + env(safe-area-inset-bottom)); }
+  .hl-sheet.open { transform: translateY(0); }
+  .sheet-grip { width: 38px; height: 4px; border-radius: 3px; background: var(--border); margin: 0 auto 12px; }
+  .hl-card { padding: 11px 0; border-bottom: 1px solid var(--hair); }
+  .hl-card:last-of-type { border-bottom: 0; }
+  .hl-quote { font-size: .86rem; line-height: 1.5; border-left: 3px solid var(--ql, #ccc); padding-left: 11px; color: var(--text); margin: 5px 0 7px; }
+  .hl-note { font-size: .84rem; color: var(--muted); white-space: pre-wrap; line-height: 1.45; }
+  .hl-swatch { width: 19px; height: 19px; border-radius: 50%; cursor: pointer; box-shadow: inset 0 0 0 2px transparent; }
+  @media (max-width: 820px) { .reader-title { font-size: 1.4rem; } .reader-col { padding: 20px 16px 140px; } .reader-controls button { padding: 5px 8px; font-size: .74rem; } }
 </style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><filter id="clip-rough"><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="6" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="0.9"/></filter></defs></svg>
+<!-- distraction-free reader + collaborative highlights -->
+<div class="reader-overlay" id="readerOverlay" aria-hidden="true"></div>
+<div class="hl-tools" id="hlTools"></div>
+<div class="hl-sheet" id="hlSheet"></div>
 <header>
   <div class="hdr-brand">
     <h1><img src="icons/favicon-32.png" class="brand-mark" alt="">PGP Reading Tracker</h1>
@@ -851,16 +920,33 @@ async function drainInbox() {
     rows = data || [];
   } catch (e) { console.warn('inbox read failed', e); return; }
   if (!rows.length) return;
-  let merged = 0; const ids = [];
+  let merged = 0; const ids = [], contentRows = [];
   rows.forEach(row => {
     ids.push(row.id);
-    const lu = row.payload;
-    if (lu && lu.title && /opentakshashila\.net/i.test(lu.url || '')) {   // basic validation
-      try { if (applyIncomingLU(lu)) merged++; } catch (e) { console.warn('merge failed', e); }
+    const p = row.payload;
+    if (p && p.type === 'content' && p.url) {                              // captured reader copy (article / video)
+      contentRows.push(p);
+    } else if (p && p.title && /opentakshashila\.net/i.test(p.url || '')) {  // an LU page (existing behaviour)
+      try { if (applyIncomingLU(p)) merged++; } catch (e) { console.warn('merge failed', e); }
     }
   });
+  // Persist any captured content (admin-only write, enforced by RLS).
+  let contentMerged = 0;
+  if (contentRows.length) {
+    try {
+      const payload = contentRows.map(p => ({
+        url: normUrl(p.url), reading_id: p.reading_id || null, title: p.title || null,
+        kind: p.kind || 'article', content_html: p.content_html || null, embed_url: p.embed_url || null,
+        extracted_by: p.extracted_by || 'readability', captured_by: currentUser.id
+      }));
+      const { error } = await sb.from('reading_content').upsert(payload, { onConflict: 'url' });
+      if (error) throw error;
+      contentMerged = payload.length;
+    } catch (e) { console.warn('content upsert failed', e); }
+  }
   try { await sb.from('inbox').delete().in('id', ids); } catch (e) { console.warn('inbox clear failed', e); }
   if (merged) { cleanupCatalog(); saveCatalog(); renderAll(); setSync('✓ Auto-synced ' + merged + ' LU' + (merged > 1 ? 's' : ''), 'ok'); setTimeout(() => setSync(''), 2500); }
+  if (contentMerged) { await loadSocial(); renderAll(); setSync('✓ Captured ' + contentMerged + ' reading' + (contentMerged > 1 ? 's' : ''), 'ok'); setTimeout(() => setSync(''), 2500); }
 }
 
 function subscribeInboxRealtime() {
@@ -997,6 +1083,7 @@ async function loadSocial() {
     sharedReadings = {}; (sr.data || []).forEach(r => { if (hidden.has(r.added_by)) return; (sharedReadings[r.lu_id] = sharedReadings[r.lu_id] || []).push(r); });
     comments = {}; (co.data || []).forEach(c => {
       if (hidden.has(c.user_id)) return;
+      if (c.highlight_id) return;                    // highlight-scoped notes live in the reader, not the reading thread
       (comments[c.reading_id] = comments[c.reading_id] || []).push(c);
       acts.push({ kind: 'comment', user_id: c.user_id, reading_id: c.reading_id, body: c.body, at: c.created_at });
     });
@@ -1004,6 +1091,19 @@ async function loadSocial() {
     buildReadingIndex();
     activityItems = acts.filter(a => a.at).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 60);
   } catch (e) { console.warn('social load failed', e); }
+
+  // Reader layer (separate + resilient: works even before reader-schema.sql is applied).
+  try {
+    const [rcd, hl] = await Promise.all([
+      sb.from('reading_content').select('*'),
+      sb.from('highlights').select('*')
+    ]);
+    const hidden = new Set(Object.keys(profiles).filter(u => profiles[u].hidden));
+    readingContent = {}; readingContentById = {};
+    (rcd.data || []).forEach(c => { if (c.url) readingContent[normUrl(c.url)] = c; if (c.reading_id) readingContentById[c.reading_id] = c; });
+    highlightsByReading = {};
+    (hl.data || []).forEach(h => { if (hidden.has(h.user_id)) return; (highlightsByReading[h.reading_id] = highlightsByReading[h.reading_id] || []).push(h); });
+  } catch (e) { /* reader schema not applied yet — reader simply stays unavailable */ }
 }
 
 function buildReadingIndex() {
@@ -1030,12 +1130,20 @@ async function migrateChecks() {
 
 function subscribeSocialRealtime() {
   if (!sb || !currentUser || socialChannel) return;
-  const reload = () => { clearTimeout(socialReloadTimer); socialReloadTimer = setTimeout(() => loadSocial().then(renderAll), 350); };
+  const reload = () => {
+    clearTimeout(socialReloadTimer);
+    socialReloadTimer = setTimeout(() => loadSocial().then(() => {
+      renderAll();
+      if (curReader && curReader.mode === 'text') paintHighlights(curReader.rId);   // live highlights while reading
+    }), 350);
+  };
   socialChannel = sb.channel('social-rt')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'completions' }, reload)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'shared_readings' }, reload)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, reload)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, reload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'highlights' }, reload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'reading_content' }, reload)
     .subscribe();
 }
 
@@ -1393,14 +1501,19 @@ function renderSuggested(lu) {
 }
 
 function readingItem(r, luUrl) {
+  readingObjs[r.id] = r;                  // register so openReader() can find this reading
   const checked = !!userData.checked[r.id];
   const strike = checked ? 'text-decoration:line-through;color:#999;' : '';
   const link = r.url || luUrl || '';
   const isFallback = !r.url && !!luUrl;   // no direct link → open the OpenTakshashila lesson page
   const ttl = isFallback ? 'Read on OpenTakshashila' : (r.url ? 'Open the source' : '');
-  const nameHtml = link
-    ? `<a href="${esc(link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="reading-name" title="${ttl}" style="${strike}">${esc(r.name)}<span class="ext">↗</span></a>`
-    : `<span class="reading-name" onclick="document.getElementById('cb_${r.id}').click()" style="cursor:pointer;${strike}">${esc(r.name)}</span>`;
+  const rmode = readerMode(r);            // captured reading copy, or an embeddable video?
+  const srcMini = (rmode && r.url) ? `<a href="${esc(r.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="src-mini" title="Open the original">source ↗</a>` : '';
+  const nameHtml = rmode
+    ? `<span class="reading-name reader-link" onclick="openReader('${r.id}')" title="${rmode.mode === 'video' ? 'Watch in app' : 'Open in distraction-free reader'}" style="${strike}">${esc(r.name)}<span class="reader-ext">${rmode.mode === 'video' ? '▶ watch' : 'reader'}</span></span>${srcMini}`
+    : (link
+      ? `<a href="${esc(link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="reading-name" title="${ttl}" style="${strike}">${esc(r.name)}<span class="ext">↗</span></a>`
+      : `<span class="reading-name" onclick="document.getElementById('cb_${r.id}').click()" style="cursor:pointer;${strike}">${esc(r.name)}</span>`);
   // who has completed this reading
   const done = completers[r.id] || [];
   const shownAv = done.slice(0, 6).map(u => avatarHTML(u, 22)).join('');
@@ -1820,6 +1933,273 @@ document.getElementById('luTitleInput').addEventListener('keydown', e => { if (e
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ══ READER + HIGHLIGHTS (Phase 1) ════════════════════════════════════════════
+let readingContent = {};       // normUrl     -> reading_content row
+let readingContentById = {};   // reading_id  -> reading_content row
+let highlightsByReading = {};  // reading_id  -> [highlight rows]
+let readingObjs = {};          // reading_id  -> the reading object (so openReader can find it)
+let curReader = null;          // { rId, rc, mode }
+const HL_COLORS = ['#FFD66B', '#9FE6A0', '#7FC4F2', '#F4A6C0', '#C9A6F2'];
+
+// URL normaliser for content keys (distinct from norm() which normalises TITLES).
+function normUrl(u) {
+  try { const x = new URL(u); x.hash = ''; x.search = ''; return (x.origin + x.pathname).replace(/\/$/, '').toLowerCase(); }
+  catch { return String(u || '').trim().toLowerCase(); }
+}
+
+// YouTube / Vimeo link -> embeddable player src (null if not embeddable).
+function videoEmbed(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url), h = u.hostname.replace(/^www\./, '');
+    if (/(^|\.)youtube\.com$/.test(h)) {
+      const v = u.searchParams.get('v'); if (v) return 'https://www.youtube.com/embed/' + v;
+      const m = u.pathname.match(/\/(?:embed|shorts|v)\/([\w-]+)/); if (m) return 'https://www.youtube.com/embed/' + m[1];
+    }
+    if (h === 'youtu.be') { const id = u.pathname.slice(1).split('/')[0]; if (id) return 'https://www.youtube.com/embed/' + id; }
+    if (h === 'vimeo.com') { const id = u.pathname.split('/').filter(Boolean)[0]; if (/^\d+$/.test(id)) return 'https://player.vimeo.com/video/' + id; }
+    if (h === 'player.vimeo.com') return url;
+  } catch (e) {}
+  return null;
+}
+
+function contentFor(r) {
+  if (!r) return null;
+  if (readingContentById[r.id]) return readingContentById[r.id];
+  if (r.url) { const c = readingContent[normUrl(r.url)]; if (c) return c; }
+  return null;
+}
+// What (if anything) this reading opens into in-app.
+function readerMode(r) {
+  const rc = contentFor(r);
+  if (rc && rc.kind === 'video' && rc.embed_url) return { mode: 'video', src: rc.embed_url, rc };
+  if (rc && rc.content_html) return { mode: 'text', rc };
+  const emb = videoEmbed(r && r.url);
+  if (emb) return { mode: 'video', src: emb, rc: null };
+  return null;
+}
+function pageForOffset(map, off) { for (const m of (map || [])) if (off >= m.start && off < m.end) return m.page; return null; }
+
+// ---- reader preferences (font / width / theme) ----
+function readerPrefs() {
+  try { return Object.assign({ fs: 'm', w: 'med', theme: 'light' }, JSON.parse(localStorage.getItem('pgp_reader_prefs') || '{}')); }
+  catch (e) { return { fs: 'm', w: 'med', theme: 'light' }; }
+}
+function saveReaderPrefs(p) { try { localStorage.setItem('pgp_reader_prefs', JSON.stringify(p)); } catch (e) {} }
+function applyReaderPrefs() {
+  const ov = document.getElementById('readerOverlay'); if (!ov || !ov.classList.contains('open')) return;
+  const p = readerPrefs(), body = ov.querySelector('.reader-body'), col = ov.querySelector('.reader-col');
+  ov.classList.toggle('theme-sepia', p.theme === 'sepia');
+  ov.classList.toggle('theme-dark', p.theme === 'dark');
+  if (body) { body.classList.remove('fs-s', 'fs-l', 'fs-xl'); if (p.fs !== 'm') body.classList.add('fs-' + p.fs); }
+  if (col) { col.classList.remove('w-narrow', 'w-wide'); if (p.w === 'narrow') col.classList.add('w-narrow'); if (p.w === 'wide') col.classList.add('w-wide'); }
+  ov.querySelectorAll('[data-theme]').forEach(b => b.classList.toggle('on', b.dataset.theme === p.theme));
+}
+function setReaderPref(k, v) { const p = readerPrefs(); p[k] = v; saveReaderPrefs(p); applyReaderPrefs(); }
+function cycleFont(dir) { const o = ['s', 'm', 'l', 'xl'], p = readerPrefs(); let i = o.indexOf(p.fs); i = Math.max(0, Math.min(o.length - 1, i + dir)); setReaderPref('fs', o[i]); }
+function cycleWidth() { const o = ['narrow', 'med', 'wide'], p = readerPrefs(); let i = (o.indexOf(p.w) + 1) % o.length; setReaderPref('w', o[i]); }
+
+// ---- original-source links ----
+function sourceLinks(rc, reading, hl) {
+  const out = [];
+  const webUrl = (reading && reading.url) || (rc && rc.url) || '';
+  if (webUrl && !(rc && rc.kind === 'pdf' && webUrl === rc.source_file)) out.push({ label: 'Read at source', href: webUrl });
+  if (rc && rc.kind === 'pdf' && rc.source_file) {
+    const jump = hl && hl.page ? '#page=' + hl.page : '';
+    out.push({ label: hl && hl.page ? 'Original PDF, p.' + hl.page : 'Original PDF', href: rc.source_file + jump });
+  }
+  return out;
+}
+function sourceBar(rc, reading) {
+  const links = sourceLinks(rc, reading); if (!links.length) return '';
+  let dom = ''; try { dom = new URL(links[0].href).hostname.replace(/^www\./, ''); } catch (e) {}
+  const prov = rc ? ' · reading copy' + (rc.extracted_by ? ' (' + rc.extracted_by + ')' : '') : '';
+  return `<div class="source-bar">${dom ? `<span class="src-dom">from ${esc(dom)}${prov}</span>` : ''}${links.map(l => `<a href="${esc(l.href)}" target="_blank" rel="noopener">${esc(l.label)} ↗</a>`).join('')}</div>`;
+}
+
+// ---- open / close the reader ----
+function openReader(rId) {
+  const r = readingObjs[rId]; if (!r) return;
+  const m = readerMode(r);
+  if (!m) { if (r.url) window.open(r.url, '_blank', 'noopener'); return; }   // nothing captured → just open source
+  curReader = { rId, rc: m.rc, mode: m.mode };
+  const ov = document.getElementById('readerOverlay');
+  const bodyHtml = m.mode === 'video'
+    ? `<div class="video-wrap"><iframe src="${esc(m.src)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`
+    : (m.rc.content_html || '');
+  ov.innerHTML = `
+    <div class="reader-topbar">
+      <button class="rt-close" onclick="closeReader()" aria-label="Close reader">✕</button>
+      <span class="rt-name">${esc(r.name || '')}</span>
+      <div class="reader-controls">
+        <button onclick="cycleFont(-1)" aria-label="Smaller text" title="Smaller text">A−</button>
+        <button onclick="cycleFont(1)" aria-label="Larger text" title="Larger text">A+</button>
+        <button onclick="cycleWidth()" aria-label="Column width" title="Column width">↔</button>
+        <button data-theme="light" onclick="setReaderPref('theme','light')" title="Light">☀</button>
+        <button data-theme="sepia" onclick="setReaderPref('theme','sepia')" title="Sepia">◐</button>
+        <button data-theme="dark" onclick="setReaderPref('theme','dark')" title="Dark">☾</button>
+      </div>
+    </div>
+    <div class="reader-scroll">
+      <div class="reader-col">
+        ${sourceBar(m.rc, r)}
+        <h1 class="reader-title">${esc((m.rc && m.rc.title) || r.name || '')}</h1>
+        <div class="reader-body" id="readerBody">${bodyHtml}</div>
+        ${m.mode === 'text' ? '<div class="reader-hint">Select any text to highlight it. Tap a highlight to see who marked it and read notes.</div>' : ''}
+      </div>
+    </div>`;
+  ov.classList.add('open'); ov.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  applyReaderPrefs();
+  if (m.mode === 'text') { paintHighlights(rId); wireReaderBody(); }
+}
+function closeReader() {
+  const ov = document.getElementById('readerOverlay');
+  ov.classList.remove('open', 'theme-sepia', 'theme-dark'); ov.setAttribute('aria-hidden', 'true'); ov.innerHTML = '';
+  document.body.style.overflow = ''; closeHlSheet(); hideHlTools(); curReader = null;
+}
+
+// ---- paint everyone's highlights onto the reflowed text ----
+function paintHighlights(rId) {
+  const body = document.getElementById('readerBody'); if (!body) return;
+  const rc = curReader && curReader.rc;
+  if (rc && rc.content_html != null) body.dataset.raw = rc.content_html;
+  body.innerHTML = body.dataset.raw || body.innerHTML;   // reset to clean copy before re-marking
+  const hls = (highlightsByReading[rId] || []).filter(h => Number.isFinite(h.start_off) && h.end_off > h.start_off);
+  if (!hls.length) return;
+  const bounds = new Set(); hls.forEach(h => { bounds.add(h.start_off); bounds.add(h.end_off); });
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  const nodes = []; let pos = 0, n;
+  while ((n = walker.nextNode())) { nodes.push({ node: n, start: pos, end: pos + n.nodeValue.length }); pos += n.nodeValue.length; }
+  nodes.forEach(({ node, start, end }) => {
+    const cuts = [...bounds].filter(b => b > start && b < end).sort((a, b) => a - b);
+    const pts = [start, ...cuts, end], raw = node.nodeValue, frag = document.createDocumentFragment();
+    let any = false;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const s = pts[i], e = pts[i + 1], txt = raw.slice(s - start, e - start);
+      const cov = hls.filter(h => h.start_off <= s && h.end_off >= e);
+      if (cov.length) { const mk = mkMark(cov); mk.textContent = txt; frag.appendChild(mk); any = true; }
+      else frag.appendChild(document.createTextNode(txt));
+    }
+    if (any) node.parentNode.replaceChild(frag, node);
+  });
+}
+function mkMark(cov) {
+  const mk = document.createElement('mark');
+  const myId = currentUser && currentUser.id;
+  const mineHl = myId ? cov.find(h => h.user_id === myId) : null;
+  const theirs = cov.filter(h => h.user_id !== myId);
+  mk.className = 'hl ' + (mineHl && theirs.length ? 'both' : mineHl ? 'mine' : 'theirs');
+  if (mineHl) mk.style.setProperty('--hl-fill', tint(mineHl.color || HL_COLORS[0], .5));
+  if (theirs.length) mk.style.setProperty('--hl-line', hlAuthorColor(theirs[0]));
+  mk.dataset.ids = cov.map(h => h.id).join(',');
+  return mk;
+}
+function hlAuthorColor(h) { return (profiles[h.user_id] && profiles[h.user_id].color) || h.color || hashColor(h.user_id); }
+function tint(hex, a) { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return hex; const v = parseInt(m[1], 16); return `rgba(${(v >> 16) & 255},${(v >> 8) & 255},${v & 255},${a})`; }
+
+// ---- selection -> create a highlight ; tap a mark -> open the sheet ----
+function wireReaderBody() {
+  const body = document.getElementById('readerBody'); if (!body || body.dataset.wired) return;
+  body.dataset.wired = '1';
+  body.addEventListener('click', e => { const mk = e.target.closest('mark.hl'); if (mk) { e.stopPropagation(); openHlSheet(mk.dataset.ids.split(',')); } });
+  const onSel = () => setTimeout(showHlToolsForSelection, 10);
+  body.addEventListener('mouseup', onSel);
+  body.addEventListener('touchend', onSel);
+}
+function showHlToolsForSelection() {
+  const body = document.getElementById('readerBody'), sel = window.getSelection(), tools = document.getElementById('hlTools');
+  if (!body || !sel || sel.isCollapsed || !sel.rangeCount) { hideHlTools(); return; }
+  const range = sel.getRangeAt(0);
+  if (!body.contains(range.startContainer) || !body.contains(range.endContainer)) { hideHlTools(); return; }
+  const text = sel.toString(); if (!text.trim()) { hideHlTools(); return; }
+  if (!currentUser) { hideHlTools(); return; }   // must be signed in to annotate
+  const pre = document.createRange(); pre.setStart(body, 0); pre.setEnd(range.startContainer, range.startOffset);
+  const start = pre.toString().length, end = start + text.length;
+  tools.innerHTML = HL_COLORS.map(c => `<span class="sw" style="background:${c}" data-c="${c}"></span>`).join('');
+  tools.querySelectorAll('.sw').forEach(sw => sw.onclick = () => createHighlight(start, end, text, sw.dataset.c));
+  const rect = range.getBoundingClientRect();
+  tools.style.left = Math.max(70, Math.min(window.innerWidth - 70, rect.left + rect.width / 2)) + 'px';
+  tools.style.top = Math.max(46, rect.top) + 'px';
+  tools.classList.add('open');
+}
+function hideHlTools() { const t = document.getElementById('hlTools'); if (t) t.classList.remove('open'); }
+
+async function createHighlight(start, end, quote, color) {
+  hideHlTools(); const sel = window.getSelection(); if (sel) sel.removeAllRanges();
+  if (!currentUser || !curReader || !sb) return;
+  const rId = curReader.rId, rc = curReader.rc;
+  const page = rc && rc.page_map ? pageForOffset(rc.page_map, start) : null;
+  const row = { reading_id: rId, user_id: currentUser.id, start_off: start, end_off: end, quote: (quote || '').slice(0, 2000), color, page };
+  const tmpId = 'tmp_' + Date.now();
+  (highlightsByReading[rId] = highlightsByReading[rId] || []).push(Object.assign({ id: tmpId, created_at: new Date().toISOString() }, row));
+  paintHighlights(rId);
+  try {
+    const { data, error } = await sb.from('highlights').insert(row).select().single();
+    if (error) throw error;
+    highlightsByReading[rId] = highlightsByReading[rId].filter(h => h.id !== tmpId).concat([data]);
+  } catch (e) {
+    console.warn('highlight failed', e);
+    highlightsByReading[rId] = highlightsByReading[rId].filter(h => h.id !== tmpId);
+    if (/relation .*highlights.* does not exist|schema cache/i.test(e.message || '')) alert('Highlights need the reader schema — run reader-schema.sql in Supabase first.');
+  }
+  paintHighlights(rId);
+}
+
+// ---- the bottom sheet: who marked this span + notes ----
+function openHlSheet(ids) {
+  const rId = curReader && curReader.rId; if (!rId) return;
+  const all = highlightsByReading[rId] || [];
+  const hls = ids.map(id => all.find(h => String(h.id) === String(id))).filter(Boolean);
+  if (!hls.length) return;
+  const myId = currentUser && currentUser.id;
+  const cards = hls.map(h => {
+    const mine = h.user_id === myId, col = hlAuthorColor(h);
+    const noteRead = (!mine && h.note) ? `<div class="hl-note">${esc(h.note)}</div>` : '';
+    const ownTools = mine ? `
+      <div style="margin-top:7px;display:flex;gap:6px">
+        <input id="hlNote_${h.id}" value="${esc(h.note || '')}" placeholder="Add a private note…" style="flex:1;padding:6px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:.82rem;font-family:inherit;outline:none">
+        <button onclick="saveHlNote('${h.id}')" style="padding:6px 11px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-size:.78rem;cursor:pointer;font-weight:650;font-family:inherit">Save</button>
+      </div>
+      <div style="margin-top:7px;display:flex;gap:6px;align-items:center">
+        ${HL_COLORS.map(c => `<span class="hl-swatch" onclick="recolorHl('${h.id}','${c}')" style="background:${c};box-shadow:inset 0 0 0 2px ${h.color === c ? 'var(--text)' : 'transparent'}"></span>`).join('')}
+        <a onclick="deleteHl('${h.id}')" style="margin-left:auto;color:var(--brand-ink);cursor:pointer;font-size:.78rem">Delete</a>
+      </div>` : '';
+    return `<div class="hl-card">
+      <div style="display:flex;align-items:center;gap:7px;font-size:.74rem;color:var(--faint)">${avatarHTML(h.user_id, 22)} <b style="color:var(--text)">${esc(nameOf(h.user_id))}</b>${testTag(h.user_id)}${h.created_at ? ' · ' + timeAgo(h.created_at) : ''}${h.page ? ' · p.' + h.page : ''}</div>
+      <div class="hl-quote" style="--ql:${col}">${esc(h.quote || '')}</div>
+      ${noteRead}${ownTools}
+    </div>`;
+  }).join('');
+  const sheet = document.getElementById('hlSheet');
+  sheet.innerHTML = `<div class="sheet-grip"></div>${cards}<div style="text-align:center;margin-top:12px"><button onclick="closeHlSheet()" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:7px 18px;cursor:pointer;font-size:.82rem;font-family:inherit">Close</button></div>`;
+  sheet.classList.add('open');
+}
+function closeHlSheet() { const s = document.getElementById('hlSheet'); if (s) s.classList.remove('open'); }
+async function saveHlNote(id) { const inp = document.getElementById('hlNote_' + id); if (inp) await updateHl(id, { note: inp.value.trim() }); }
+async function recolorHl(id, color) { await updateHl(id, { color }); }
+async function updateHl(id, patch) {
+  const rId = curReader && curReader.rId;
+  try { await sb.from('highlights').update(patch).eq('id', id); } catch (e) { console.warn('update highlight failed', e); }
+  const h = (highlightsByReading[rId] || []).find(x => String(x.id) === String(id)); if (h) Object.assign(h, patch);
+  paintHighlights(rId); openHlSheet([id]);
+}
+async function deleteHl(id) {
+  const rId = curReader && curReader.rId;
+  try { await sb.from('highlights').delete().eq('id', id); } catch (e) { console.warn('delete highlight failed', e); }
+  highlightsByReading[rId] = (highlightsByReading[rId] || []).filter(x => String(x.id) !== String(id));
+  paintHighlights(rId); closeHlSheet();
+}
+
+// Esc closes the reader / sheet.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const sheet = document.getElementById('hlSheet');
+  if (sheet && sheet.classList.contains('open')) { closeHlSheet(); return; }
+  const ov = document.getElementById('readerOverlay');
+  if (ov && ov.classList.contains('open')) closeReader();
+});
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 boot();
