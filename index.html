@@ -405,6 +405,12 @@
   .reader-body img { max-width: 100%; height: auto; border-radius: 8px; }
   .reader-body figure { margin: 1.2em 0; }
   .reader-body blockquote { border-left: 3px solid var(--brand-soft); margin: 1.2em 0; padding-left: 16px; color: var(--reader-fg); opacity: .85; }
+  /* tables (from LlamaParse-extracted PDFs) */
+  .reader-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 1.2em 0; }
+  .reader-body table { border-collapse: collapse; font-size: .82em; line-height: 1.4; min-width: 100%; }
+  .reader-body th, .reader-body td { border: 1px solid rgba(128,128,128,.32); padding: 5px 10px; text-align: left; vertical-align: top; }
+  .reader-body th { font-weight: 700; background: rgba(128,128,128,.1); }
+  .reader-body table p { margin: 0; }
   .reader-body a { color: var(--brand-ink); }
   .reader-body section[data-page] + section[data-page] { margin-top: 1.4em; }
   .video-wrap { position: relative; width: 100%; aspect-ratio: 16/9; margin: 6px 0 20px; border-radius: 12px; overflow: hidden; background: #000; }
@@ -2518,6 +2524,8 @@ function paintHighlights(rId) {
   const rc = curReader && curReader.rc;
   if (rc && rc.content_html != null) body.dataset.raw = rc.content_html;
   body.innerHTML = body.dataset.raw || body.innerHTML;   // reset to clean copy before re-marking
+  // wrap wide tables so they scroll horizontally instead of breaking the column (no text change → highlight offsets stay valid)
+  body.querySelectorAll('table').forEach(t => { const p = t.parentElement; if (p && !p.classList.contains('reader-table-wrap')) { const w = document.createElement('div'); w.className = 'reader-table-wrap'; p.insertBefore(w, t); w.appendChild(t); } });
   const hls = (highlightsByReading[rId] || []).filter(h => Number.isFinite(h.start_off) && h.end_off > h.start_off);
   if (!hls.length) return;
   const bounds = new Set(); hls.forEach(h => { bounds.add(h.start_off); bounds.add(h.end_off); });
