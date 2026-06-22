@@ -186,20 +186,11 @@
   .btn-ghost { background:var(--surface-2); color:var(--muted); border:1px solid var(--border); }
   .btn-ghost:hover { color:var(--text); }
 
-  /* Bookmarklet + import */
-  .setup-panel { margin:12px 4px 0; background:var(--brand-soft); border:1px solid var(--border); border-radius:var(--r-sm); padding:12px; }
-  .setup-panel .setup-title { font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--brand-ink); margin-bottom:8px; }
-  .setup-panel p { font-size:.74rem; color:var(--muted); margin-bottom:8px; line-height:1.5; }
-  .bookmarklet-link { display:block; text-align:center; padding:9px 12px; background:var(--brand); color:#fff !important; border-radius:8px; font-size:.8rem; font-weight:700; text-decoration:none; cursor:grab; }
-  .setup-toggle { width:100%; background:transparent; border:1px dashed var(--border); border-radius:8px; padding:7px; font-size:.74rem; color:var(--faint); cursor:pointer; margin-top:10px; font-family:inherit; }
-  .setup-toggle:hover { border-color:var(--brand); color:var(--brand-ink); }
+  /* Import Course Outline */
   .import-modal { width:520px; }
   .import-modal textarea { height:110px; font-family:ui-monospace,monospace; font-size:.78rem; resize:vertical; }
   .import-preview { background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:12px; font-size:.8rem; display:none; }
   .import-preview.show { display:block; }
-  .import-preview h4 { font-weight:700; color:var(--brand-ink); margin-bottom:6px; }
-  .import-preview .imp-stat { color:var(--muted); margin-bottom:3px; }
-  .import-preview .imp-self { display:inline-block; background:var(--gold-soft); color:var(--gold); font-size:.68rem; font-weight:700; padding:1px 7px; border-radius:99px; margin-left:6px; }
 
   /* Mobile */
   @media (max-width: 820px) {
@@ -321,7 +312,6 @@
   .reading-item:hover .reading-meta-hover { opacity: .7; max-height: 32px; margin-top: 7px; }
 
   /* avatar picker */
-  .av-group-label { font-size: .64rem; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: .07em; margin: 14px 0 8px; }
   .av-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 9px; }
   .av-pick { border: 2.5px solid transparent; border-radius: 50%; padding: 0; background: none; cursor: pointer; line-height: 0; transition: transform .13s var(--ease), border-color .13s; }
   .av-pick img { width: 100%; border-radius: 50%; display: block; }
@@ -547,29 +537,12 @@
   </div>
 </div>
 
-<!-- Import LU Modal -->
-<div class="modal-bg" id="importModal">
-  <div class="modal import-modal">
-    <h3>📥 Import LU from Bookmarklet</h3>
-    <p style="font-size:.82rem;color:#666;margin-bottom:10px">Go to any LU page → click the bookmarklet → come back here and paste below.</p>
-    <textarea id="importPaste" placeholder='Paste the copied JSON here…' oninput="previewImport()"></textarea>
-    <div class="import-preview" id="importPreview">
-      <h4 id="impTitle"></h4>
-      <div class="imp-stat" id="impStats"></div>
-      <div class="imp-stat" id="impOutcomes"></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('importModal')">Cancel</button>
-      <button class="btn btn-primary" id="importConfirmBtn" onclick="confirmImport()" disabled>Add to Tracker</button>
-    </div>
-  </div>
-</div>
 
 <!-- Import Course Outline Modal -->
 <div class="modal-bg" id="outlineModal">
   <div class="modal import-modal" style="width:560px">
     <h3>📋 Import Course Outline</h3>
-    <p style="font-size:.82rem;color:#666;margin-bottom:10px">On the PGP course page (the <em>Learner's Guide</em> / content list), let it fully load, then <strong>select all</strong> (Cmd+A), <strong>copy</strong> (Cmd+C), and paste below. This builds every subject and its LU cards at once. Readings get filled later via the per-LU bookmarklet.</p>
+    <p style="font-size:.82rem;color:#666;margin-bottom:10px">On the PGP course page (the <em>Learner's Guide</em> / content list), let it fully load, then <strong>select all</strong> (Cmd+A), <strong>copy</strong> (Cmd+C), and paste below. This builds every subject and its LU cards at once. Readings sync in automatically via the auto-sync userscript.</p>
     <textarea id="outlinePaste" placeholder="Paste the copied course outline here…" oninput="previewOutline()"></textarea>
     <div class="import-preview" id="outlinePreview">
       <h4 id="outlineSummary"></h4>
@@ -851,8 +824,8 @@ function onSearch() {
 let sb = null;            // supabase client
 let currentUser = null;   // signed-in user (null = anonymous, local-only)
 let isAdmin = false;      // currentUser.email === ADMIN_EMAIL
-let catPushTimer = null, progPushTimer = null;
-let catChannel = null, progChannel = null, inboxChannel = null, socialChannel = null;
+let catPushTimer = null;
+let catChannel = null, inboxChannel = null, socialChannel = null;
 // social state (populated when signed in)
 let profiles = {};         // user_id -> { name, emoji, color }
 let completers = {};       // reading_id -> [user_id,...]
@@ -874,7 +847,6 @@ function setSync(text, tone) {
 }
 
 const canonCat  = c => { try { return JSON.stringify((c && c.subjects) || []); } catch (e) { return ''; } };
-const canonProg = p => { try { return JSON.stringify({ c: p.checked || {}, e: p.extras || {} }); } catch (e) { return ''; } };
 
 // ---- push (write) ----
 async function pushCatalog() {
@@ -887,17 +859,6 @@ async function pushCatalog() {
     setSync('✓ Saved', 'ok'); setTimeout(() => setSync(''), 1500);
   } catch (e) { console.warn('catalog push failed', e); setSync('⚠ Save failed', 'err'); }
 }
-async function pushProgress() {
-  progPushTimer = null;
-  if (!sb || !currentUser) return;
-  try {
-    const { error } = await sb.from('progress').upsert(
-      { user_id: currentUser.id, data: userData, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-    if (error) throw error;
-    setSync('✓ Synced', 'ok'); setTimeout(() => setSync(''), 1500);
-  } catch (e) { console.warn('progress push failed', e); setSync('⚠ Offline — saved locally', 'err'); }
-}
-
 // ---- load (read) ----
 async function loadCatalog() {
   if (!sb) return;
@@ -910,18 +871,6 @@ async function loadCatalog() {
   if (!activeSubjectId || !catalog.subjects.some(s => s.id === activeSubjectId))
     activeSubjectId = catalog.subjects[0]?.id || null;
 }
-async function loadProgress() {
-  if (!sb || !currentUser) return;
-  setSync('Loading…');
-  try {
-    const { data: row, error } = await sb.from('progress').select('data').eq('user_id', currentUser.id).maybeSingle();
-    if (error) throw error;
-    if (row && row.data) { userData = normalizeProgress(row.data); saveProgressLocal(); setSync('✓ Synced', 'ok'); }
-    else { await pushProgress(); }               // first login → migrate this device's progress up
-  } catch (e) { console.warn('progress load failed, using local', e); setSync('⚠ Offline', 'err'); }
-  setTimeout(() => setSync(''), 1500);
-}
-
 // ---- realtime ----
 function subscribeCatalogRealtime() {
   if (!sb || catChannel) return;
@@ -936,18 +885,6 @@ function subscribeCatalogRealtime() {
       renderAll();
     }).subscribe();
 }
-function subscribeProgressRealtime() {
-  if (!sb || !currentUser || progChannel) return;
-  progChannel = sb.channel('progress-rt-' + currentUser.id)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'progress', filter: 'user_id=eq.' + currentUser.id }, payload => {
-      const nd = payload.new && payload.new.data;
-      if (!nd) return;
-      if (progPushTimer) return;
-      if (canonProg(normalizeProgress(nd)) === canonProg(userData)) return;
-      userData = normalizeProgress(nd); saveProgressLocal(); renderAll();
-    }).subscribe();
-}
-
 // ---- auto-sync inbox (admin only): drain scraped LUs from the userscript ----
 // Merge one incoming scraped LU into the catalog: prefer an existing LU (by title,
 // so the outline-import shells get backfilled with readings+links), else place it
@@ -1105,8 +1042,8 @@ async function onSession(session) {
     }
     renderAll(); renderAcct();
   } else {
-    [socialChannel, inboxChannel, progChannel].forEach(ch => { if (ch) { try { sb.removeChannel(ch); } catch (e) {} } });
-    socialChannel = inboxChannel = progChannel = null;
+    [socialChannel, inboxChannel].forEach(ch => { if (ch) { try { sb.removeChannel(ch); } catch (e) {} } });
+    socialChannel = inboxChannel = null;
     profiles = {}; completers = {}; sharedReadings = {}; comments = {}; myProfile = null;
     userData = loadLocalProgress();
     renderAll(); renderAcct();
@@ -1408,10 +1345,6 @@ function progressRing(pct, color, size) {
   </svg><div class="ring-pct" style="color:${color}">${pct}%</div></div>`;
 }
 
-function findLU(luId) {
-  for (const sub of catalog.subjects) { const lu = sub.lus.find(l => l.id === luId); if (lu) return lu; }
-  return null;
-}
 // Mandatory/Recommended are the official catalog list only (no member additions mixed in).
 function luReadings(lu, type) { return lu[type] || []; }
 // Member-contributed suggestions for an LU (shown in their own section, attributed).
@@ -1933,159 +1866,6 @@ function confirmAddLU() {
 
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
-// ── IMPORT (bookmarklet) ──────────────────────────────────────────────────────
-let importSubjectId = null;
-let importParsed = null;
-
-function openImport(subjectId) {
-  importSubjectId = subjectId;
-  importParsed = null;
-  document.getElementById('importPaste').value = '';
-  document.getElementById('importPreview').classList.remove('show');
-  document.getElementById('importConfirmBtn').disabled = true;
-  document.getElementById('importModal').classList.add('open');
-  setTimeout(() => document.getElementById('importPaste').focus(), 50);
-}
-
-function previewImport() {
-  const raw = document.getElementById('importPaste').value.trim();
-  const preview = document.getElementById('importPreview');
-  const btn = document.getElementById('importConfirmBtn');
-  importParsed = null;
-  preview.classList.remove('show');
-  btn.disabled = true;
-  if (!raw) return;
-  try {
-    const lu = JSON.parse(raw);
-    if (!lu.title || (!lu.mandatory && !lu.recommended)) return;
-    importParsed = lu;
-    document.getElementById('impTitle').innerHTML =
-      esc(lu.title) + (lu.selfStudy ? '<span class="imp-self">Self-Study</span>' : '');
-    document.getElementById('impStats').textContent =
-      `📌 ${(lu.mandatory||[]).length} mandatory · ⭐ ${(lu.recommended||[]).length} recommended`;
-    document.getElementById('impOutcomes').textContent =
-      lu.outcomes?.length ? `📎 ${lu.outcomes.length} learning outcomes` : '';
-    preview.classList.add('show');
-    btn.disabled = false;
-  } catch(e) {}
-}
-
-// Fuzzy reading-name match — the page's link text rarely equals the seed's
-// descriptive name (e.g. "…video on X" vs "X"), so compare leniently.
-function rclean(x) { return norm(x).replace(/\([^)]*\)/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim(); }
-function readingMatch(a, b) {
-  a = rclean(a); b = rclean(b);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  const sh = a.length <= b.length ? a : b, lo = a.length <= b.length ? b : a;
-  if (sh.length >= 10 && lo.indexOf(sh) !== -1) return true;        // one contains the other
-  const ta = new Set(a.split(' ').filter(w => w.length > 2));
-  const tb = b.split(' ').filter(w => w.length > 2);
-  if (!ta.size || !tb.length) return false;
-  const common = tb.filter(w => ta.has(w)).length;                 // strong token overlap
-  return common >= 4 && common >= Math.ceil(Math.min(ta.size, tb.length) * 0.7);
-}
-
-// Fill in url/desc on existing readings (fuzzy-matched by name) and append any new ones.
-function mergeReadings(lu, type, incoming, force) {
-  lu[type] = lu[type] || [];
-  (incoming || []).forEach(inc => {
-    const match = lu[type].find(r => readingMatch(r.name, inc.name));
-    if (match) {
-      if (inc.url !== undefined && (force || !match.url)) match.url = inc.url;   // force overwrites; '' clears
-      if (inc.desc && (force || !match.desc)) match.desc = inc.desc;             // force corrects the description
-    } else {
-      lu[type].push({ id: uid(), name: inc.name, desc: inc.desc || '', url: inc.url || '' });
-    }
-  });
-}
-
-// Collapse fuzzy-duplicate readings within an LU, keeping the first (seed) entry —
-// which preserves its id and any checkmarks — and lifting the link onto it.
-function dedupeLU(lu) {
-  ['mandatory', 'recommended'].forEach(type => {
-    const arr = lu[type] || [], out = [];
-    arr.forEach(r => {
-      const ex = out.find(o => readingMatch(o.name, r.name));
-      if (ex) { if (!ex.url && r.url) ex.url = r.url; if (!ex.desc && r.desc) ex.desc = r.desc; }
-      else out.push(r);
-    });
-    lu[type] = out;
-  });
-}
-// Normalised LU identity (ignores the "LU-NN", "(Self-Study)" etc.) for de-duping LUs.
-function luKey(title) { return norm(String(title || '').replace(/^LU[-\s]?\d+/i, '').replace(/\([^)]*\)/g, '').replace(/^[:\s]+/, '')); }
-function cleanupCatalog() {
-  const before = JSON.stringify(catalog);
-  catalog.subjects.forEach(sub => {
-    const seen = {}, out = [];
-    sub.lus.forEach(lu => {
-      const k = luKey(lu.title);
-      const ex = k && seen[k];
-      if (ex) {                                    // duplicate LU → merge into the first
-        mergeReadings(ex, 'mandatory', lu.mandatory || []);
-        mergeReadings(ex, 'recommended', lu.recommended || []);
-        if (lu.url && !ex.url) ex.url = lu.url;
-        if ((lu.outcomes || []).length && !(ex.outcomes || []).length) ex.outcomes = lu.outcomes;
-        ex.selfStudy = ex.selfStudy || lu.selfStudy;
-      } else { if (k) seen[k] = lu; out.push(lu); }
-    });
-    out.forEach(dedupeLU);
-    sub.lus = out;
-  });
-  return JSON.stringify(catalog) !== before;
-}
-
-function confirmImport() {
-  if (!importParsed || !importSubjectId) return;
-  const sub = catalog.subjects.find(s => s.id === importSubjectId);
-  if (!sub) return;
-  const lu = importParsed;
-
-  // If this LU already exists, MERGE: backfill links onto existing readings
-  // (this is how the seed readings get their URLs) and add any new ones.
-  const existing = sub.lus.find(l => norm(l.title) === norm(lu.title));
-  if (existing) {
-    if (!confirm('This LU already exists. Update it — add links to its readings and any new readings?')) return;
-    mergeReadings(existing, 'mandatory', lu.mandatory);
-    mergeReadings(existing, 'recommended', lu.recommended);
-    if (lu.url) existing.url = lu.url;
-    if ((lu.outcomes || []).length && !(existing.outcomes || []).length) existing.outcomes = lu.outcomes;
-    if (typeof lu.selfStudy === 'boolean') existing.selfStudy = lu.selfStudy;
-    saveCatalog();
-    closeModal('importModal');
-    renderAll();
-    setTimeout(() => {
-      const card = document.getElementById('lu_' + existing.id);
-      if (card) { card.classList.add('open'); userData.openLUs[existing.id] = true; card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-    }, 100);
-    return;
-  }
-
-  let luId = sub.id + '_' + (lu.id || uid());
-  const taken = allLuIds();
-  while (taken.has(luId)) luId += '_' + uid().slice(0, 3);
-  // ensure all reading IDs are unique (and keep their url if the bookmarklet captured one)
-  const ensureIds = arr => (arr || []).map(r => ({ ...r, id: r.id || uid(), url: r.url || '' }));
-  sub.lus.push({
-    id: luId,
-    title: lu.title,
-    selfStudy: !!lu.selfStudy,
-    url: lu.url || '',
-    outcomes: lu.outcomes || [],
-    mandatory: ensureIds(lu.mandatory),
-    recommended: ensureIds(lu.recommended)
-  });
-  saveCatalog();
-  closeModal('importModal');
-  renderAll();
-  // auto-open the just-imported LU card
-  setTimeout(() => {
-    const card = document.getElementById('lu_' + sub.lus[sub.lus.length-1].id);
-    if (card) { card.classList.add('open'); card.scrollIntoView({behavior:'smooth', block:'center'}); }
-  }, 100);
-}
-
 // ── IMPORT COURSE OUTLINE (paste the whole content list) ──────────────────────
 let outlineParsed = [];
 
@@ -2182,16 +1962,7 @@ function confirmOutlineImport() {
   closeModal('outlineModal');
   if (firstNewId) activeSubjectId = firstNewId;
   renderAll();
-  alert(`✅ Imported ${addedSubs} new subject(s) and ${addedLus} LU(s).\nReadings stay empty — fill them per-LU with the bookmarklet.`);
-}
-
-// ── BOOKMARKLET SETUP TOGGLE ──────────────────────────────────────────────────
-function toggleSetup() {
-  const panel = document.getElementById('setupPanel');
-  const btn = document.querySelector('.setup-toggle');
-  const hidden = panel.style.display === 'none';
-  panel.style.display = hidden ? 'block' : 'none';
-  btn.textContent = hidden ? '🔖 Hide Setup' : '🔖 Bookmarklet Setup';
+  alert(`✅ Imported ${addedSubs} new subject(s) and ${addedLus} LU(s).\nReadings sync automatically as the auto-sync userscript visits each LU page.`);
 }
 
 document.querySelectorAll('.modal-bg').forEach(bg => {
