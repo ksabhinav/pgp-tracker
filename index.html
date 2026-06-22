@@ -333,6 +333,7 @@
   .attach-btn:hover { background: var(--brand-soft); border-color: var(--brand-soft); }
   .pdf-chip { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; font-size: .74rem; font-weight: 600; color: var(--brand-ink); background: var(--brand-soft); padding: 3px 9px; border-radius: 99px; text-decoration: none; }
   .pdf-chip:hover { text-decoration: underline; }
+  .pdf-make { cursor: pointer; }
 
   /* activity day separators */
   .day-break { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--faint); margin: 22px 0 4px; padding-bottom: 5px; border-bottom: 1px solid var(--hair); }
@@ -1733,9 +1734,11 @@ function readingItem(r, luUrl) {
   const hasC = cmts.length > 0;
   const cmtToggle = `<a class="meta-link" onclick="toggleComments('${r.id}')">${hasC ? 'Discuss · ' + cmts.length : 'Discuss'}</a>`;
   const thread = openComments[r.id] ? renderThread(r.id, cmts) : '';
-  const hasMeta = done.length || hasC || r.added_by || openComments[r.id];
+  // admin: turn a (non-readable) reading into a reflowed PDF in the reader
+  const pdfBtn = (isAdmin && !rmode) ? `<label class="meta-link pdf-make" title="Attach a PDF to open this reading in the in-app reader">make readable<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="onAdminPdf('${r.id}', this)"></label>` : '';
+  const hasMeta = done.length || hasC || r.added_by || openComments[r.id] || pdfBtn;
   const metaRow = hasMeta
-    ? `<div class="reading-meta">${completersHTML}${cmtToggle}${addedHTML}</div>`
+    ? `<div class="reading-meta">${completersHTML}${cmtToggle}${pdfBtn}${addedHTML}</div>`
     : `<div class="reading-meta reading-meta-hover">${cmtToggle}</div>`;
   return `<div class="reading-item${checked ? ' checked' : ''}" id="ri_${r.id}">
     <input type="checkbox" id="cb_${r.id}" ${checked ? 'checked' : ''} onchange="toggleReading('${r.id}')">
@@ -2269,6 +2272,102 @@ function sourceBar(rc, reading) {
   const prov = rc ? ' · reading copy' + (rc.extracted_by ? ' (' + rc.extracted_by + ')' : '') : '';
   return `<div class="source-bar">${dom ? `<span class="src-dom">from ${esc(dom)}${prov}</span>` : ''}${links.map(l => `<a href="${esc(l.href)}" target="_blank" rel="noopener">${esc(l.label)} ↗</a>`).join('')}</div>`;
 }
+
+// ── PDF → reflowed reader content (Phase 2) ──────────────────────────────────
+// Born-digital fast path runs in-browser via pdf.js. Scanned / multi-column PDFs
+// are detected and handed to the extract-pdf edge function (deploy it for those).
+let pdfReady = null;
+function ensurePdfJs() {
+  if (pdfReady) return pdfReady;
+  pdfReady = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js';
+    s.onload = () => { try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js'; } catch (e) {} resolve(); };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return pdfReady;
+}
+function _pdfMedian(a) { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+function _pdfEsc(s) { return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+// one page's text items -> ordered paragraphs (best-effort reading order, two-column aware)
+function _pdfParagraphs(items, pageW) {
+  const rows = items.map(i => ({ x: i.transform[4], y: i.transform[5], w: i.width || 0, h: i.height || Math.abs(i.transform[3]) || 10, str: i.str })).filter(r => r.str && r.str.trim());
+  if (!rows.length) return [];
+  const cx = pageW / 2, band = pageW * 0.06;
+  const straddlers = rows.filter(r => r.x < cx + band && r.x + r.w > cx - band).length;
+  const twoCol = rows.length > 30 && straddlers / rows.length < 0.05;
+  const cols = twoCol ? [rows.filter(r => r.x + r.w / 2 < cx), rows.filter(r => r.x + r.w / 2 >= cx)] : [rows];
+  const lineH = _pdfMedian(rows.map(r => r.h)) || 10;
+  const paras = [];
+  for (const col of cols) {
+    const sorted = [...col].sort((a, b) => b.y - a.y || a.x - b.x);
+    const lines = []; let cur = []; let lastY = null;
+    for (const r of sorted) { if (lastY === null || Math.abs(r.y - lastY) <= lineH * 0.6) cur.push(r); else { lines.push(cur); cur = [r]; } lastY = r.y; }
+    if (cur.length) lines.push(cur);
+    const lineObjs = lines.map(ls => { ls.sort((a, b) => a.x - b.x); return { y: ls[0].y, text: ls.map(r => r.str).join(' ').replace(/\s+/g, ' ').trim() }; }).filter(l => l.text);
+    let buf = []; let prevY = null;
+    const flush = () => { if (buf.length) { paras.push(buf.join(' ').replace(/\s+/g, ' ').trim()); buf = []; } };
+    for (const l of lineObjs) { if (prevY !== null && (prevY - l.y) > lineH * 1.6) flush(); buf.push(l.text); prevY = l.y; }
+    flush();
+  }
+  return paras;
+}
+// extract a PDF (ArrayBuffer) -> { route, html, text, pageMap, flags }
+async function extractPdf(arrayBuffer) {
+  await ensurePdfJs();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const perPage = []; let scanned = 0, twoColish = 0;
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p); const vp = page.getViewport({ scale: 1 });
+    const tc = await page.getTextContent(); const items = tc.items.filter(i => i.str);
+    const chars = items.reduce((n, i) => n + i.str.length, 0); if (chars < 40) scanned++;
+    const cx = vp.width / 2, band = vp.width * 0.06;
+    const straddlers = items.filter(i => { const x = i.transform[4], w = i.width || 0; return x < cx + band && x + w > cx - band; }).length;
+    if (items.length > 30 && straddlers / items.length < 0.05) twoColish++;
+    perPage.push({ page: p, paras: _pdfParagraphs(items, vp.width) });
+  }
+  const total = pdf.numPages || 1;
+  const route = scanned / total > 0.3 ? 'ocr' : twoColish / total > 0.3 ? 'parser' : 'reflow';
+  // Build HTML and the page map together so char offsets line up with container.textContent.
+  let html = '', text = '', pageMap = [];
+  for (const { page, paras } of perPage) {
+    const pageText = paras.join(''); const start = text.length; text += pageText;
+    pageMap.push({ page, start, end: text.length });
+    html += `<section data-page="${page}">` + paras.map(t => `<p>${_pdfEsc(t)}</p>`).join('') + `</section>`;
+  }
+  return { route, kind: 'pdf', html, text, pageMap, flags: { scannedPages: scanned, twoColumnPages: twoColish, totalPages: total } };
+}
+// Admin: turn a PDF file into reflowed reader content for a reading.
+async function addPdfReading(reading, file) {
+  if (!sb || !currentUser || !isAdmin) return;
+  if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) { alert('Please choose a PDF file.'); return; }
+  if (file.size > 25 * 1024 * 1024) { alert('That PDF is over 25 MB — please use a smaller file.'); return; }
+  setSync('Reading PDF…');
+  try {
+    const path = `pdfs/${reading.id}-${Date.now()}.pdf`;
+    const up = await sb.storage.from('uploads').upload(path, file, { contentType: 'application/pdf' });
+    if (up.error) throw up.error;
+    const sourceFile = sb.storage.from('uploads').getPublicUrl(path).data.publicUrl;
+    const key = normUrl(reading.url || sourceFile);
+    const res = await extractPdf(await file.arrayBuffer());
+    if (res.route === 'reflow') {
+      const { error } = await sb.from('reading_content').upsert({ url: key, reading_id: reading.id, title: reading.name, kind: 'pdf', content_html: res.html, page_map: res.pageMap, source_file: sourceFile, extracted_by: 'pdfjs', needs_review: false, captured_by: currentUser.id }, { onConflict: 'url' });
+      if (error) throw error;
+      setSync('✓ PDF ready to read', 'ok'); setTimeout(() => setSync(''), 2000);
+      await loadSocial(); renderMain();
+    } else {
+      try {
+        await sb.functions.invoke('extract-pdf', { body: { path, url: key, reading_id: reading.id, title: reading.name, route: res.route } });
+        setSync('PDF queued for ' + (res.route === 'ocr' ? 'OCR' : 'parsing'), 'ok'); setTimeout(() => setSync(''), 2500);
+      } catch (e) {
+        setSync('⚠ Needs server extractor', 'err'); setTimeout(() => setSync(''), 2500);
+        alert('This PDF is ' + (res.route === 'ocr' ? 'scanned (needs OCR)' : 'multi-column (needs the layout parser)') + '. The extract-pdf edge function isn’t deployed yet, so it can’t be reflowed automatically.');
+      }
+    }
+  } catch (e) { console.warn('pdf add failed', e); setSync('⚠ PDF failed', 'err'); setTimeout(() => setSync(''), 2500); alert('Could not process that PDF: ' + (e.message || e)); }
+}
+function onAdminPdf(rId, input) { const f = input.files[0]; input.value = ''; if (!f) return; const r = readingObjs[rId]; if (r) addPdfReading(r, f); }
 
 // ---- open / close the reader ----
 function openReader(rId) {
