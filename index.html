@@ -381,12 +381,14 @@
   .reader-controls button { background: rgba(128,128,128,.12); border: none; color: inherit; border-radius: 8px; padding: 5px 9px; font-size: .78rem; cursor: pointer; font-family: inherit; font-weight: 650; line-height: 1; }
   .reader-controls button:hover { background: rgba(128,128,128,.22); }
   .reader-controls button.on { background: var(--brand); color: #fff; }
-  .reader-scroll { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; }
+  .reader-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; -webkit-overflow-scrolling: touch; }
   .reader-col { max-width: var(--reader-w, 680px); margin: 0 auto; padding: 24px 22px 140px; }
   .reader-col.w-narrow { --reader-w: 560px; }
   .reader-col.w-wide   { --reader-w: 840px; }
   .reader-title { font-family: var(--display); font-weight: 800; letter-spacing: -.02em; font-size: 1.7rem; line-height: 1.2; margin: 14px 0 18px; overflow-wrap: break-word; }
-  .reader-body { font-size: var(--reader-fs, 1.06rem); line-height: 1.72; font-family: var(--reader-font, 'Hanken Grotesk', system-ui, sans-serif); }
+  .reader-body { font-size: var(--reader-fs, 1.06rem); line-height: 1.72; font-family: var(--reader-font, 'Hanken Grotesk', system-ui, sans-serif); overflow-wrap: break-word; word-break: break-word; max-width: 100%; }
+  .reader-body pre { white-space: pre-wrap; overflow-x: auto; }
+  .reader-body a { word-break: break-word; }
   .reader-body.fs-s  { --reader-fs: .96rem; }
   .reader-body.fs-l  { --reader-fs: 1.2rem; }
   .reader-body.fs-xl { --reader-fs: 1.38rem; }
@@ -408,6 +410,8 @@
   .source-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 12px; font-size: .78rem; padding: 9px 12px; background: rgba(128,128,128,.08); border-radius: 10px; margin-bottom: 4px; }
   .source-bar .src-dom { opacity: .6; }
   .source-bar a { color: var(--brand-ink); font-weight: 650; text-decoration: none; white-space: nowrap; }
+  .reader-overlay.theme-dark .reader-body a, .reader-overlay.theme-dark .source-bar a { color: #F5B33C; }
+  .reader-overlay.theme-dark .reader-body a { text-decoration: underline; text-decoration-color: rgba(245,179,60,.5); text-underline-offset: 2px; }
   .source-bar a:hover { text-decoration: underline; }
   .reader-hint { margin-top: 32px; font-size: .76rem; opacity: .45; }
 
