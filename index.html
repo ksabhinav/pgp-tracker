@@ -420,6 +420,13 @@
   .reader-body mark.hl.mine { background: var(--hl-fill, rgba(255,214,107,.5)); }
   .reader-body mark.hl.theirs { background: transparent; border-bottom: 2px solid var(--hl-line, #888); }
   .reader-body mark.hl.both { background: var(--hl-fill, rgba(255,214,107,.5)); border-bottom: 2px solid var(--hl-line, #888); }
+  .reader-body mark.hl.cmt { border-bottom: 2px dotted #c98a16; }   /* passage comment — dotted, no fill */
+  .reader-overlay.theme-dark .reader-body mark.hl.cmt { border-bottom-color: #F5B33C; }
+  /* compact comment popover, anchored near the quote (separate from highlights) */
+  .cmt-pop { position: fixed; z-index: 332; width: min(300px, 92vw); max-height: 60vh; overflow: auto; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 12px 38px rgba(0,0,0,.32); padding: 12px 13px; display: none; }
+  .cmt-pop.open { display: block; }
+  .cmt-pop .cmt-quote { font-size: .82rem; line-height: 1.45; border-left: 3px solid #d68a12; padding-left: 9px; color: var(--text); margin-bottom: 4px; }
+  .hl-tools .sw-cmt { height: 21px; display: inline-flex; align-items: center; color: #fff; cursor: pointer; margin-left: 5px; padding-left: 8px; border-left: 1px solid rgba(255,255,255,.28); }
   /* native text selection inside the reader — themed so it stays visible (esp. dark) and distinct from highlight fills */
   .reader-overlay ::selection { background: #620D3C; color: #fff; }
   .reader-overlay ::-moz-selection { background: #620D3C; color: #fff; }
@@ -463,6 +470,7 @@
 <div class="reader-overlay" id="readerOverlay" aria-hidden="true"></div>
 <div class="hl-tools" id="hlTools"></div>
 <div class="hl-sheet" id="hlSheet"></div>
+<div class="cmt-pop" id="cmtPop"></div>
 <div class="font-menu" id="fontMenu"></div>
 <nav class="bottom-nav" id="bottomNav" aria-label="Primary">
   <button data-bnav="readings" onclick="setView('readings')" aria-label="Readings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5A1.5 1.5 0 0 1 4.5 4H11v16H4.5A1.5 1.5 0 0 0 3 21.5z"/><path d="M21 5.5A1.5 1.5 0 0 0 19.5 4H13v16h6.5A1.5 1.5 0 0 1 21 21.5z"/></svg><span>Readings</span></button>
@@ -1135,11 +1143,11 @@ async function loadSocial() {
       const u = h.user_id;
       if (hidden.has(u)) return;
       if (pvNoHL.has(u) && u !== me) return;        // others' hidden highlights; keep my own (for reader + My Highlights)
-      const dk = u + '|' + h.reading_id + '|' + h.start_off + '|' + h.end_off;
+      const dk = u + '|' + h.reading_id + '|' + h.start_off + '|' + h.end_off + '|' + (h.color === 'comment' ? 'c' : 'h');
       if (hlSeen.has(dk)) return;                    // collapse duplicate rows (same span, same person)
       hlSeen.add(dk);
       (highlightsByReading[h.reading_id] = highlightsByReading[h.reading_id] || []).push(h);
-      if (!pvNoHL.has(u) && h.created_at) hlActs.push({ kind: 'highlight', user_id: u, reading_id: h.reading_id, quote: h.quote, at: h.created_at });
+      if (!pvNoHL.has(u) && h.created_at && h.color !== 'comment') hlActs.push({ kind: 'highlight', user_id: u, reading_id: h.reading_id, quote: h.quote, at: h.created_at });
     });
     if (hlActs.length) {                            // fold highlights into the activity timelines
       allActivity = allActivity.concat(hlActs);
@@ -1554,7 +1562,7 @@ function myHighlightGroups() {
   const me = currentUser && currentUser.id;
   const groups = {};   // reading_id -> [highlights], newest first within
   Object.keys(highlightsByReading).forEach(rId => {
-    (highlightsByReading[rId] || []).forEach(h => { if (h.user_id === me) (groups[rId] = groups[rId] || []).push(h); });
+    (highlightsByReading[rId] || []).forEach(h => { if (h.user_id === me && h.color !== 'comment') (groups[rId] = groups[rId] || []).push(h); });
   });
   Object.values(groups).forEach(list => list.sort((a, b) => (a.start_off || 0) - (b.start_off || 0)));
   // order readings by most-recent highlight
@@ -2311,7 +2319,7 @@ function openReader(rId) {
 function closeReader() {
   const ov = document.getElementById('readerOverlay');
   ov.classList.remove('open', 'theme-sepia', 'theme-dark'); ov.setAttribute('aria-hidden', 'true'); ov.innerHTML = '';
-  document.body.style.overflow = ''; closeHlSheet(); hideHlTools(); closeFontMenu(); curReader = null;
+  document.body.style.overflow = ''; closeHlSheet(); closeCommentPopover(); hideHlTools(); closeFontMenu(); curReader = null;
 }
 
 // ---- paint everyone's highlights onto the reflowed text ----
@@ -2344,9 +2352,14 @@ function paintHighlights(rId) {
 function mkMark(cov) {
   const mk = document.createElement('mark');
   const myId = currentUser && currentUser.id;
-  const mineHl = myId ? cov.find(h => h.user_id === myId) : null;
-  const theirs = cov.filter(h => h.user_id !== myId);
-  mk.className = 'hl ' + (mineHl && theirs.length ? 'both' : mineHl ? 'mine' : 'theirs');
+  const hls = cov.filter(h => h.color !== 'comment');      // colour highlights
+  const cmts = cov.filter(h => h.color === 'comment');     // passage comments
+  const mineHl = myId ? hls.find(h => h.user_id === myId) : null;
+  const theirs = hls.filter(h => h.user_id !== myId);
+  let cls = 'hl';
+  if (hls.length) cls += ' ' + (mineHl && theirs.length ? 'both' : mineHl ? 'mine' : 'theirs');
+  if (cmts.length) cls += ' cmt';
+  mk.className = cls;
   if (mineHl) mk.style.setProperty('--hl-fill', tint(mineHl.color || HL_COLORS[0], .5));
   if (theirs.length) mk.style.setProperty('--hl-line', hlAuthorColor(theirs[0]));
   mk.dataset.ids = cov.map(h => h.id).join(',');
@@ -2360,7 +2373,15 @@ function wireReaderBody() {
   const body = document.getElementById('readerBody'); if (!body || body.dataset.wired) return;
   body.dataset.wired = '1';
   body.addEventListener('click', e => {
-    const mk = e.target.closest('mark.hl'); if (mk) { e.stopPropagation(); openHlSheet(mk.dataset.ids.split(',')); return; }
+    const mk = e.target.closest('mark.hl');
+    if (mk) {
+      e.stopPropagation();
+      const ids = mk.dataset.ids.split(','), all = highlightsByReading[curReader.rId] || [];
+      const cmtIds = ids.filter(id => { const a = all.find(x => String(x.id) === String(id)); return a && a.color === 'comment'; });
+      if (cmtIds.length) openCommentPopover(cmtIds, e.clientX, e.clientY);   // comment passages → compact popover
+      else openHlSheet(ids);                                                 // highlights → bottom sheet
+      return;
+    }
     const a = e.target.closest('a[href]'); if (a) { e.preventDefault(); window.open(a.href, '_blank', 'noopener'); }   // in-article links open out, never hijack the reader
   });
   const onSel = () => setTimeout(showHlToolsForSelection, 10);
@@ -2377,9 +2398,10 @@ function showHlToolsForSelection() {
   const pre = document.createRange(); pre.setStart(body, 0); pre.setEnd(range.startContainer, range.startOffset);
   const start = pre.toString().length, end = start + text.length;
   if (hlMode) { createHighlight(start, end, text, readerPrefs().hlColor); return; }   // highlighter on → mark instantly
-  tools.innerHTML = HL_COLORS.map(c => `<span class="sw" style="background:${c}" data-c="${c}"></span>`).join('');
-  tools.querySelectorAll('.sw').forEach(sw => sw.onclick = () => createHighlight(start, end, text, sw.dataset.c));
   const rect = range.getBoundingClientRect();
+  tools.innerHTML = HL_COLORS.map(c => `<span class="sw" style="background:${c}" data-c="${c}"></span>`).join('') + `<span class="sw-cmt" data-act="cmt" title="Comment on this passage">${commentGlyph()}</span>`;
+  tools.querySelectorAll('.sw').forEach(sw => sw.onclick = () => createHighlight(start, end, text, sw.dataset.c));
+  tools.querySelector('[data-act="cmt"]').onclick = () => createComment(start, end, text, rect);
   tools.style.left = Math.max(70, Math.min(window.innerWidth - 70, rect.left + rect.width / 2)) + 'px';
   tools.style.top = Math.max(46, rect.top) + 'px';
   tools.classList.add('open');
@@ -2387,6 +2409,57 @@ function showHlToolsForSelection() {
 function hideHlTools() { const t = document.getElementById('hlTools'); if (t) t.classList.remove('open'); }
 function markerIcon(px) { px = px || 15; return `<svg width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="m6 16 9-9 3 3-9 9H6z"/></svg>`; }
 function toggleHlMode() { hlMode = !hlMode; const b = document.querySelector('[data-hl]'); if (b) b.classList.toggle('on', hlMode); hideHlTools(); }
+function commentGlyph() { return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg>'; }
+
+// ---- standalone passage comments (anchored like highlights, color='comment', no fill) ----
+let curCmtIds = null, curCmtPos = null;
+async function createComment(start, end, quote, rect) {
+  hideHlTools(); const sel = window.getSelection(); if (sel) sel.removeAllRanges();
+  if (!currentUser || !curReader || !sb) return;
+  const rId = curReader.rId, rc = curReader.rc;
+  const x = rect ? rect.left + rect.width / 2 : window.innerWidth / 2, y = rect ? rect.bottom : 200;
+  const dupe = (highlightsByReading[rId] || []).find(h => h.user_id === currentUser.id && h.start_off === start && h.end_off === end && h.color === 'comment');
+  if (dupe) { openCommentPopover([dupe.id], x, y, true); return; }
+  const page = rc && rc.page_map ? pageForOffset(rc.page_map, start) : null;
+  const row = { reading_id: rId, user_id: currentUser.id, start_off: start, end_off: end, quote: (quote || '').slice(0, 2000), color: 'comment', page };
+  const tmpId = 'tmp_' + Date.now();
+  (highlightsByReading[rId] = highlightsByReading[rId] || []).push(Object.assign({ id: tmpId, created_at: new Date().toISOString() }, row));
+  paintHighlights(rId);
+  let realId = tmpId;
+  try { const { data, error } = await sb.from('highlights').insert(row).select().single(); if (error) throw error; highlightsByReading[rId] = highlightsByReading[rId].filter(h => h.id !== tmpId).concat([data]); realId = data.id; }
+  catch (e) { console.warn('comment anchor failed', e); highlightsByReading[rId] = highlightsByReading[rId].filter(h => h.id !== tmpId); paintHighlights(rId); if (/schema cache|does not exist/i.test(e.message || '')) alert('Comments need the reader schema — run reader-schema.sql first.'); return; }
+  paintHighlights(rId);
+  openCommentPopover([realId], x, y, true);
+}
+function renderCommentPopover() {
+  const rId = curReader && curReader.rId; const pop = document.getElementById('cmtPop');
+  if (!rId || !curCmtIds || !pop) return;
+  const all = highlightsByReading[rId] || [], myId = currentUser && currentUser.id;
+  const anns = curCmtIds.map(id => all.find(h => String(h.id) === String(id))).filter(a => a && a.color === 'comment');
+  if (!anns.length) { closeCommentPopover(); return; }
+  pop.innerHTML = anns.map(h => `<div>
+      <div class="cmt-quote">${esc((h.quote || '').slice(0, 180))}</div>
+      ${hlDiscussion(h, myId)}
+      ${h.user_id === myId ? `<div style="margin-top:6px;text-align:right"><a onclick="deleteHl('${h.id}')" style="color:var(--brand-ink);cursor:pointer;font-size:.74rem">Remove comment</a></div>` : ''}
+    </div>`).join('') + `<div style="text-align:right;margin-top:4px"><button onclick="closeCommentPopover()" style="background:none;border:none;color:var(--muted);font-size:.78rem;cursor:pointer;font-family:inherit">Close</button></div>`;
+}
+function openCommentPopover(ids, x, y, focusInput) {
+  curCmtIds = ids; if (x != null) curCmtPos = { x, y };
+  const pop = document.getElementById('cmtPop'); renderCommentPopover();
+  pop.style.visibility = 'hidden'; pop.classList.add('open');
+  const w = pop.offsetWidth, h = pop.offsetHeight, pos = curCmtPos || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  let left = Math.max(8, Math.min(pos.x - w / 2, window.innerWidth - w - 8));
+  let top = pos.y + 10; if (top + h > window.innerHeight - 8) top = Math.max(8, pos.y - h - 12);
+  pop.style.left = left + 'px'; pop.style.top = top + 'px'; pop.style.visibility = 'visible';
+  if (focusInput) { const inp = pop.querySelector('input'); if (inp) inp.focus(); }
+  setTimeout(() => document.addEventListener('click', closeCmtPopOutside, true), 0);
+}
+function closeCommentPopover() { const p = document.getElementById('cmtPop'); if (p) p.classList.remove('open'); curCmtIds = null; document.removeEventListener('click', closeCmtPopOutside, true); }
+function closeCmtPopOutside(e) { if (!e.target.closest('#cmtPop') && !e.target.closest('mark.cmt')) closeCommentPopover(); }
+function refreshOpenThread() {
+  if (curCmtIds && document.getElementById('cmtPop').classList.contains('open')) renderCommentPopover();
+  else if (curSheetIds && document.getElementById('hlSheet').classList.contains('open')) openHlSheet(curSheetIds);
+}
 
 async function createHighlight(start, end, quote, color) {
   hideHlTools(); const sel = window.getSelection(); if (sel) sel.removeAllRanges();
@@ -2454,7 +2527,7 @@ function hlDiscussion(h, myId) {
       </div></div>`).join('');
   const box = currentUser
     ? `<div style="display:flex;gap:6px;margin-top:6px">
-        <input id="hlc_${h.id}" placeholder="Comment on this highlight…" onkeydown="if(event.key==='Enter')addHighlightComment('${h.id}')" style="flex:1;padding:6px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:.82rem;font-family:inherit;outline:none">
+        <input id="hlc_${h.id}" placeholder="Add a comment…" onkeydown="if(event.key==='Enter')addHighlightComment('${h.id}')" style="flex:1;padding:6px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:.82rem;font-family:inherit;outline:none">
         <button onclick="addHighlightComment('${h.id}')" style="padding:6px 12px;background:var(--brand);color:#fff;border:none;border-radius:8px;font-size:.78rem;cursor:pointer;font-weight:650;font-family:inherit">Post</button>
       </div>`
     : `<div style="font-size:.74rem;color:var(--faint);margin-top:6px"><a onclick="showAuth()" style="color:var(--brand-ink);cursor:pointer">Sign in</a> to discuss.</div>`;
@@ -2469,15 +2542,15 @@ async function addHighlightComment(hlId) {
   if (!currentUser) { showAuth(); return; }
   const rId = curReader && curReader.rId; inp.value = '';
   (commentsByHighlight[hlId] = commentsByHighlight[hlId] || []).push({ id: 'tmp_' + Date.now(), user_id: currentUser.id, reading_id: rId, body, highlight_id: hlId, created_at: new Date().toISOString() });
-  if (curSheetIds) openHlSheet(curSheetIds);
+  refreshOpenThread();
   try { await sb.from('comments').insert({ reading_id: rId, user_id: currentUser.id, body, highlight_id: hlId }); await loadSocial(); }
   catch (e) { console.warn('highlight comment failed', e); }
-  if (curSheetIds) openHlSheet(curSheetIds);
+  refreshOpenThread();
 }
 async function deleteHlComment(id, hlId) {
   try { await sb.from('comments').delete().eq('id', id); } catch (e) { console.warn('delete comment failed', e); }
   commentsByHighlight[hlId] = (commentsByHighlight[hlId] || []).filter(c => String(c.id) !== String(id));
-  if (curSheetIds) openHlSheet(curSheetIds);
+  refreshOpenThread();
 }
 function closeHlSheet() { const s = document.getElementById('hlSheet'); if (s) s.classList.remove('open'); curSheetIds = null; }
 async function saveHlNote(id) { const inp = document.getElementById('hlNote_' + id); if (inp) await updateHl(id, { note: inp.value.trim() }); }
@@ -2492,7 +2565,7 @@ async function deleteHl(id) {
   const rId = curReader && curReader.rId;
   try { await sb.from('highlights').delete().eq('id', id); } catch (e) { console.warn('delete highlight failed', e); }
   highlightsByReading[rId] = (highlightsByReading[rId] || []).filter(x => String(x.id) !== String(id));
-  paintHighlights(rId); closeHlSheet();
+  paintHighlights(rId); closeHlSheet(); closeCommentPopover();
 }
 
 // Esc closes the reader / sheet.
