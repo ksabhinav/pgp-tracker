@@ -1734,7 +1734,7 @@ function readingItem(r, luUrl) {
   const thread = openComments[r.id] ? renderThread(r.id, cmts) : '';
   // admin: turn a (non-readable) reading into a reflowed PDF in the reader
   const urlIsPdf = r.url && /\.pdf($|\?|#)/i.test(r.url);
-  const pdfBtn = (isAdmin && !rmode)
+  const pdfBtn = (isAdmin && !rmode && r.url)   // no make-readable/upload on blank-URL (copyright-routed) readings
     ? (urlIsPdf
       ? `<a class="meta-link" onclick="makeReadableFromUrl('${r.id}')" title="Extract this PDF straight from its link — no upload">make readable</a>`
       : `<label class="meta-link pdf-make" title="Attach a PDF to open this reading in the in-app reader">make readable (upload)<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="onAdminPdf('${r.id}', this)"></label>`)
