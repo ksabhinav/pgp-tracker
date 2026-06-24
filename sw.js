@@ -1,5 +1,5 @@
 // PGP10 Reading Tracker — service worker (offline shell + installable PWA)
-const CACHE = 'pgp10-v32';
+const CACHE = 'pgp10-v33';
 const ASSETS = [
   './',
   './index.html',
