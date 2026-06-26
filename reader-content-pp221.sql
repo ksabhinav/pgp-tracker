@@ -83,3 +83,34 @@ on conflict (url) do update
       extracted_by = excluded.extracted_by,
       needs_review = excluded.needs_review,
       captured_at  = now();
+
+-- On Liberal Nationalism (web article -> in-app reader; reading pp221_lu01_m02)
+insert into public.reading_content (url, reading_id, title, kind, content_html, extracted_by, needs_review)
+values (
+  $rc$https://www.nitinpai.in/2008/09/04/on-liberal-nationalism$rc$,
+  $rc$pp221_lu01_m02$rc$,
+  $rc$On Liberal Nationalism$rc$,
+  'article',
+  $html$<p><em>Connecting liberalism, nationalism and realism</em></p>
+<p class="reading-byline"><em>Nitin Pai · The Acorn · 4 September 2008</em></p>
+<p><em>This is an archived blog post from The Acorn.</em></p>
+<p>Let's start with an axiom: all individuals are free, and from this freedom, they possess certain inalienable rights. They possess these rights and freedoms at all times, but in a state of nature, their ability to enjoy the freedom and exercise the rights is circumscribed by their individual power. In Indian philosophy, the state of nature is termed as matsya nyaya, or the law of the fishes, a condition under which the stronger fish eats the weaker fish. Thomas Hobbes, the 17th century English philosopher, describes this as the time when “men live without a common power to keep them all in awe, they are in that condition which is called war; and such a war as is of every man against every man (bellum omnium contra omnes).” Life, therefore, is “solitary, poor, nasty, brutish, and short.”</p>
+<p>To better enjoy their rights and freedoms, individuals trade-off a part of their freedom for the security offered by a state. Hence Kautilya writes:</p>
+<blockquote>People suffering from anarchy as illustrated by the proverbial tendency of a large fish swallowing a small one (matsyanyayabhibhutah prajah), first elected Manu, the Vaivasvata, to be their king; and allotted one-sixth of the grains grown and one-tenth of merchandise as sovereign dues. Fed by this payment, kings took upon themselves the responsibility of maintaining the safety and security of their subjects (yogakshemavah), and of being answerable for the sins of their subjects when the principle of levying just punishments and taxes has been violated. [Arthashastra I:13]</blockquote>
+<p>In Western philosophy, this trade-off forms the basis of social contract theories. In Leviathan, Hobbes argues that individuals cede all their rights in return for protection to a sovereign who is himself above the law. John Locke, writing after Hobbes, is more moderate: in his view, individuals surrender only some of their rights to a government that rules by the consent of the governed.</p>
+<p>This trade-off forms the basis of modern liberal democratic states. The exact implementation differs from state to state, and depends on a number of factors. But most often, the social contract is codified in a constitution. Constitutions are not, and do not have to be either perfect or immutable. To varying degrees, they affirm the rights of the individual and offer an enlightened method to settle the differences between the interests of individuals. In sharp contrast to Hobbes' Leviathan, modern constitutions also, to varying degrees, make the government itself subject to the rule of law.</p>
+<p>The upshot is that the state is necessary for the practical enjoyment of individual rights and freedoms. The survival and security of the state—often termed “the national interest”—is directly connected to the ability of citizens to enjoy their freedom. Put in another way, the “national interest” is the well-being and development of all its citizens.</p>
+<p>If we adopt this people-centric definition of the national interest, how should one regard territory? Is territorial integrity uncompromisable? Not quite. To the extent territory is necessary for the well-being and development of all citizens, holding the territory is in the national interest. Where territorial compromises enhance the well-being of citizens, they are in the national interest. In the state-centric formulation, the objective question is whether acquiring, keeping or parting with a particular piece of land enhances the survival and security of the state, or not.</p>
+<p>While the establishment of a state allows individuals to enjoy their rights—abridged as they are—the relationship between states remains in the world of matsya nyaya or anarchy. To an extent, the development of international law and institutions like the United Nations allow states to pursue ‘rules-based’ relations. But the ultimate arbiter of international relations is power. It follows that to protect its national interests—whether expressed in the people-centric or state-centric terms—states have to maximise their power relative to others. This results in an international balance-of-power, which can be stable or unstable depending on the power dynamics obtaining at a particular moment in time. The objective of the state then, is to maximise its own power to ensure that the international balance-of-power is in its favour.</p>
+<p>This is how liberalism, nationalism and realism are connected with each other. Liberalism (or libertarianism, in its American usage) is concerned about individual freedom. To enjoy freedom in practice, the individual gives up some of it to the state. The state, a nation-state in India's case, exists to ensure the rights, freedoms and well-being (yogakshema) of its people. So ensuring the survival and security of the Indian state—by maximising its relative power internationally—is wholly consistent with allowing its citizens to live in freedom.</p>$html$,
+  'manual',
+  false
+)
+on conflict (url) do update
+  set reading_id   = excluded.reading_id,
+      title        = excluded.title,
+      kind         = excluded.kind,
+      content_html = excluded.content_html,
+      extracted_by = excluded.extracted_by,
+      needs_review = excluded.needs_review,
+      captured_at  = now();
