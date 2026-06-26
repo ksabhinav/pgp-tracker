@@ -1428,7 +1428,7 @@ function renderMain() {
       </div>
       ${progressRing(pct, color)}
     </div>
-    ${(stats.mandDone === 0 && stats.recDone === 0)
+    ${(stats.mandTotal === 0 && stats.recTotal === 0)
       ? `<div class="zero-banner"><b>${stats.mandTotal + stats.recTotal} readings</b> across ${sub.lus.length} learning unit${sub.lus.length === 1 ? '' : 's'} — start anywhere below.</div>`
       : `<div class="stats-row">
       <div class="stat-card total"><div class="val">${stats.mandTotal + stats.recTotal}</div><div class="lbl">Readings</div></div>
