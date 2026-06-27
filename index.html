@@ -979,7 +979,8 @@ function renderAcct() {
     el.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px">${av} ${nm}</span>`
       + (isAdmin ? `<span style="background:#F1A222;color:#3a0a23;border-radius:6px;padding:1px 7px;font-weight:700;font-size:.66rem">ADMIN</span>` : '')
       + `<button onclick="openProfile()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Edit profile</button>`
-      + `<button onclick="signOut()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign out</button>`;
+      + `<button onclick="signOut()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign out</button>`
+      + `<div style="width:100%;font-size:.62rem;opacity:.6;margin-top:4px;font-family:monospace">diag · uid:${esc(String(currentUser.id).slice(0,8))} · profile:${myProfile ? 'yes' : 'NO'} · save:${esc(window.lastSaveMsg || '—')}</div>`;
   } else if (isConfigured()) {
     el.innerHTML = `<span style="color:#F1A222">● Saved on this device</span>`
       + `<button onclick="showAuth()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign in to sync across devices</button>`;
@@ -1248,11 +1249,14 @@ async function saveProfile() {
     .single();
   if (error || !saved) {
     console.warn('profile save failed', error);
+    window.lastSaveMsg = error ? ('ERR ' + (error.code || '') + ' ' + (error.message || JSON.stringify(error))) : 'no row returned';
+    renderAcct();
     alert('Couldn’t save your profile — it didn’t persist.\n\n'
-      + (error ? (error.message || error.code || JSON.stringify(error)) : 'no row returned')
+      + window.lastSaveMsg
       + '\n\nPlease screenshot this and send it over.');
     return;                               // keep the picker open; don't pretend it saved
   }
+  window.lastSaveMsg = 'ok→uid:' + String(saved.user_id || '').slice(0, 8);
   myProfile = { ...(myProfile || {}), ...saved };
   profiles[currentUser.id] = myProfile;
   // privacy toggles saved separately so a pre-migration DB (missing columns) still saves name/avatar
