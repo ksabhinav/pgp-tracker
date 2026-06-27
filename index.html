@@ -980,7 +980,7 @@ function renderAcct() {
       + (isAdmin ? `<span style="background:#F1A222;color:#3a0a23;border-radius:6px;padding:1px 7px;font-weight:700;font-size:.66rem">ADMIN</span>` : '')
       + `<button onclick="openProfile()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Edit profile</button>`
       + `<button onclick="signOut()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign out</button>`
-      + `<div style="width:100%;font-size:.62rem;opacity:.6;margin-top:4px;font-family:monospace">diag · uid:${esc(String(currentUser.id).slice(0,8))} · profile:${myProfile ? 'yes' : 'NO'} · load:${esc(window.lastLoadMsg || '—')} · save:${esc(window.lastSaveMsg || '—')}</div>`;
+      + `<div style="width:100%;font-size:.62rem;opacity:.6;margin-top:4px;font-family:monospace">diag v38 · uid:${esc(String(currentUser.id).slice(0,8))} · profile:${myProfile ? 'yes' : 'NO'} · load:${esc(window.lastLoadMsg || '—')} · save:${esc(window.lastSaveMsg || '—')}</div>`;
   } else if (isConfigured()) {
     el.innerHTML = `<span style="color:#F1A222">● Saved on this device</span>`
       + `<button onclick="showAuth()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign in to sync across devices</button>`;
@@ -1067,16 +1067,21 @@ async function loadSocial() {
   if (!sb || !currentUser) { window.lastLoadMsg = 'bailed: sb=' + (!!sb) + ' user=' + (!!currentUser); return; }
   window.lastLoadMsg = 'started';
   try {
-    const [pf, cm, sr, co] = await Promise.all([
+    await sb.auth.getSession();   // ensure the restored session/token is ready before reads (works-after-login-but-fails-on-reload)
+    // allSettled, not all: a failure in ONE table (e.g. comments) must NOT stop profiles from loading.
+    const settled = await Promise.allSettled([
       sb.from('profiles').select('*'),                                // select * so missing privacy cols don't error
       sb.from('completions').select('user_id,reading_id,created_at'),
       sb.from('shared_readings').select('*'),
       sb.from('comments').select('*').order('created_at')
     ]);
+    const unwrap = r => r.status === 'fulfilled' ? r.value : { data: null, error: { message: String((r.reason && (r.reason.message || r.reason)) || 'rejected') } };
+    const pf = unwrap(settled[0]), cm = unwrap(settled[1]), sr = unwrap(settled[2]), co = unwrap(settled[3]);
     const me = currentUser.id;
     window.lastLoadMsg = 'profs:' + (pf.data ? pf.data.length : 'null')
-      + (pf.error ? (' ERR ' + (pf.error.code || '') + ' ' + (pf.error.message || '')) : '')
-      + ' mine:' + ((pf.data || []).some(p => p.user_id === me) ? 'in' : 'absent');
+      + (pf.error ? (' pERR ' + (pf.error.code || '') + ' ' + (pf.error.message || '')) : '')
+      + ' mine:' + ((pf.data || []).some(p => p.user_id === me) ? 'in' : 'absent')
+      + ' [c' + (cm.error ? '!' : '+') + ' s' + (sr.error ? '!' : '+') + ' k' + (co.error ? '!' : '+') + ']';
     profiles = {}; (pf.data || []).forEach(p => profiles[p.user_id] = p);
     const hidden = new Set(Object.keys(profiles).filter(u => profiles[u].hidden));   // dummy/test accounts — hidden from everyone
     // per-member privacy opt-outs (default = share; only an explicit false hides)
