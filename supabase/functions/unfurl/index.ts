@@ -1,5 +1,4 @@
 // Unfurl a URL: fetch it server-side, parse OpenGraph/meta, cache in link_previews, return the card data.
-// Deployed with: npx supabase@latest functions deploy unfurl --project-ref hjpqbfzhjsxdxxbrvkvi
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const CORS = {
@@ -28,7 +27,7 @@ function meta(html: string, ...names: string[]): string {
   return "";
 }
 
-Deno.serve(async (req) => {
+async function handle(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
     const { url, key } = await req.json();
@@ -69,4 +68,9 @@ Deno.serve(async (req) => {
   } catch (e) {
     return resp({ error: String((e as Error)?.message || e) }, 200);
   }
-});
+}
+
+// Support both edge runtimes: the classic Deno.serve handler AND the newer `export default { fetch }`.
+// @ts-ignore - Deno.serve exists in the Supabase edge runtime
+try { Deno.serve(handle); } catch { /* newer runtime ignores this; uses the default export below */ }
+export default { fetch: handle };
