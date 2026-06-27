@@ -1207,11 +1207,14 @@ function clipIcon(px) { px = px || 14; return `<svg viewBox="0 0 24 24" width="$
 function avatarHTML(uid, size) {
   const p = profiles[uid] || {}; const s = size || 24;
   const name = p.name || 'Member';
-  if (isAvatarId(p.emoji)) {
-    return `<span class="av av-img" data-name="${esc(name)}" aria-label="${esc(name)}" style="width:${s}px;height:${s}px"><img src="${avatarSrc(p.emoji)}" alt="" loading="lazy" style="width:100%;height:100%;display:block"></span>`;
-  }
   const color = p.color || hashColor(uid);
-  return `<span class="av" data-name="${esc(name)}" aria-label="${esc(name)}" style="width:${s}px;height:${s}px;background:${color};font-size:${Math.round(s * 0.4)}px">${esc(initials(name))}</span>`;
+  const init = esc(initials(name));
+  if (isAvatarId(p.emoji)) {
+    // Coloured-initials base behind the image: if the SVG ever fails to load (cache/network/bad file),
+    // onerror removes the img and the initials show through — never a broken-image box.
+    return `<span class="av av-img" data-name="${esc(name)}" aria-label="${esc(name)}" style="width:${s}px;height:${s}px;background:${color}!important;font-size:${Math.round(s * 0.4)}px;position:relative">${init}<img src="${avatarSrc(p.emoji)}" alt="" loading="lazy" style="position:absolute;inset:0;width:100%;height:100%;border-radius:50%;display:block" onerror="this.remove()"></span>`;
+  }
+  return `<span class="av" data-name="${esc(name)}" aria-label="${esc(name)}" style="width:${s}px;height:${s}px;background:${color};font-size:${Math.round(s * 0.4)}px">${init}</span>`;
 }
 function nameOf(uid) { return (profiles[uid] && profiles[uid].name) || 'Member'; }
 function testTag(uid) { return (profiles[uid] && profiles[uid].hidden) ? ' <span class="test-tag">test account</span>' : ''; }
@@ -1224,7 +1227,7 @@ function openProfile() {
   document.getElementById('profName').value = cur.name || (currentUser ? currentUser.email.split('@')[0] : '');
   selAvatar = isAvatarId(cur.emoji) ? cur.emoji : 'a01';
   document.getElementById('avatarGrid').innerHTML = '<div class="av-row">' +
-    AVATAR_IDS.map(id => `<button class="av-pick" data-id="${id}" onclick="selAvatar='${id}';renderProfPicker()"><img src="${avatarSrc(id)}" alt="" loading="lazy"></button>`).join('') +
+    AVATAR_IDS.map(id => `<button class="av-pick" data-id="${id}" onclick="selAvatar='${id}';renderProfPicker()"><img src="${avatarSrc(id)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></button>`).join('') +
     '</div>';
   renderProfPicker();
   document.getElementById('pfShareComp').checked = cur.share_completions !== false;   // default on
@@ -1233,7 +1236,7 @@ function openProfile() {
   document.getElementById('profileModal').classList.add('open');
 }
 function renderProfPicker() {
-  document.getElementById('profPreview').innerHTML = `<img src="${avatarSrc(selAvatar)}" alt="" style="width:78px;height:78px;border-radius:50%;box-shadow:var(--shadow-md)">`;
+  document.getElementById('profPreview').innerHTML = `<img src="${avatarSrc(selAvatar)}" alt="" style="width:78px;height:78px;border-radius:50%;box-shadow:var(--shadow-md)" onerror="this.style.visibility='hidden'">`;
   document.querySelectorAll('.av-pick').forEach(b => b.classList.toggle('sel', b.dataset.id === selAvatar));
 }
 async function saveProfile() {
