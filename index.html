@@ -206,8 +206,12 @@
     .search-box { grid-column: 1 / -1; margin-bottom: 4px; }
     .nav-item { justify-content: center; border: 1px solid var(--border); }
     .sidebar-title { grid-column: 1 / -1; padding: 8px 4px 2px; }
-    #subjectTabs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
-    .subject-tab { border: 1px solid var(--border); flex: 1 1 calc(50% - 6px); }
+    /* one compact horizontally-scrolling row of subject chips — stays one row no matter
+       how many subjects (and however long their names), instead of stacking full-width. */
+    #subjectTabs { grid-column: 1 / -1; display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
+    #subjectTabs::-webkit-scrollbar { display: none; }
+    .subject-tab { border: 1px solid var(--border); flex: 0 0 auto; max-width: 60vw; }
+    .subject-tab > div:nth-child(2) > div:last-child { display: none; }   /* drop the per-chip progress bar; keep dot · name · % */
     #adminTools, .add-subject { grid-column: 1 / -1; }
     #adminTools { display: flex; flex-direction: column; }
     .add-subject { margin: 0; }
