@@ -13,5 +13,5 @@ drop policy if exists "lp read" on public.link_previews;
 create policy "lp read" on public.link_previews for select using (auth.uid() is not null);
 -- (No client write policy: previews are written by the edge function via the service role.)
 
--- Optional — live-update cards as previews land (safe to skip):
+-- Optional - live-update cards as previews land (safe to skip):
 -- alter publication supabase_realtime add table public.link_previews;
