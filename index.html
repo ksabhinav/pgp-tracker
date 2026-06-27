@@ -2068,7 +2068,7 @@ async function ensurePreview(url) {
   if (linkPreviews[key] || previewInflight[key]) return;
   previewInflight[key] = true;
   try {
-    const { data, error } = await sb.functions.invoke('unfurl', { body: { url, key } });
+    const { data, error } = await sb.functions.invoke('swift-processor', { body: { url, key } });  // OG-unfurl edge fn (deployed under this name)
     if (!error && data && (data.title || data.image)) {
       linkPreviews[key] = data;
       if (currentView === 'readings' || currentView === 'activity') renderMain();
