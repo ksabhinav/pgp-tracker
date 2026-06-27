@@ -47,6 +47,7 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; transition: background .25s, color .25s; }
+  button, input, select, textarea { font-family: inherit; }   /* form controls don't inherit the app font by default — without this they render in the UA's system font ("stale" look) */
   a { color: var(--link); }
   ::selection { background: var(--brand-soft); }
 
