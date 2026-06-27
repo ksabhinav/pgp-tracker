@@ -980,7 +980,7 @@ function renderAcct() {
       + (isAdmin ? `<span style="background:#F1A222;color:#3a0a23;border-radius:6px;padding:1px 7px;font-weight:700;font-size:.66rem">ADMIN</span>` : '')
       + `<button onclick="openProfile()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Edit profile</button>`
       + `<button onclick="signOut()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign out</button>`
-      + `<div style="width:100%;font-size:.62rem;opacity:.6;margin-top:4px;font-family:monospace">diag v38 · uid:${esc(String(currentUser.id).slice(0,8))} · profile:${myProfile ? 'yes' : 'NO'} · load:${esc(window.lastLoadMsg || '—')} · save:${esc(window.lastSaveMsg || '—')}</div>`;
+      + `<div style="width:100%;font-size:.62rem;opacity:.6;margin-top:4px;font-family:monospace">diag v39 · uid:${esc(String(currentUser.id).slice(0,8))} · profile:${myProfile ? 'yes' : 'NO'} · load:${esc(window.lastLoadMsg || '—')}${window.lastCatErr ? ' · catErr:' + esc(window.lastCatErr) : ''} · save:${esc(window.lastSaveMsg || '—')}</div>`;
   } else if (isConfigured()) {
     el.innerHTML = `<span style="color:#F1A222">● Saved on this device</span>`
       + `<button onclick="showAuth()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign in to sync across devices</button>`;
@@ -1020,15 +1020,17 @@ async function onSession(session) {
     if (HIDDEN_EMAILS.includes((currentUser.email || '').toLowerCase())) {   // dummy/test account → mark hidden
       try { await sb.from('profiles').upsert({ user_id: currentUser.id, hidden: true }, { onConflict: 'user_id' }); } catch (e) {}
     }
-    await loadCatalog();
-    await loadSocial();                           // profiles, my completions, shared readings, comments
-    await migrateChecks();                        // carry over any old local checkmarks
+    // Each step is guarded so a failure in ONE (catalog, migrate, inbox) can't abort the
+    // handler before loadSocial runs — that was silently killing profile load on reload.
+    try { await loadCatalog(); } catch (e) { console.warn('loadCatalog failed', e); window.lastCatErr = String((e && (e.message || e)) || e); }
+    await loadSocial();                           // profiles, my completions, shared readings, comments — MUST run
+    try { await migrateChecks(); } catch (e) { console.warn('migrateChecks failed', e); }
     subscribeSocialRealtime();
     if (needsProfile()) openProfile();            // first login → pick an avatar
     if (isAdmin) {
       subscribeInboxRealtime();
-      await drainInbox();                         // pull anything the userscript queued
-      if (cleanupCatalog()) saveCatalog();        // collapse any fuzzy-duplicate readings
+      try { await drainInbox(); } catch (e) { console.warn('drainInbox failed', e); }
+      try { if (cleanupCatalog()) saveCatalog(); } catch (e) { console.warn('cleanupCatalog failed', e); }
     }
     renderAll(); renderAcct();
   } else {
