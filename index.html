@@ -979,8 +979,7 @@ function renderAcct() {
     el.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px">${av} ${nm}</span>`
       + (isAdmin ? `<span style="background:#F1A222;color:#3a0a23;border-radius:6px;padding:1px 7px;font-weight:700;font-size:.66rem">ADMIN</span>` : '')
       + `<button onclick="openProfile()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Edit profile</button>`
-      + `<button onclick="signOut()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign out</button>`
-      + `<div style="width:100%;font-size:.62rem;opacity:.6;margin-top:4px;font-family:monospace">diag v39 · uid:${esc(String(currentUser.id).slice(0,8))} · profile:${myProfile ? 'yes' : 'NO'} · load:${esc(window.lastLoadMsg || '—')}${window.lastCatErr ? ' · catErr:' + esc(window.lastCatErr) : ''} · save:${esc(window.lastSaveMsg || '—')}</div>`;
+      + `<button onclick="signOut()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign out</button>`;
   } else if (isConfigured()) {
     el.innerHTML = `<span style="color:#F1A222">● Saved on this device</span>`
       + `<button onclick="showAuth()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:.7rem;cursor:pointer">Sign in to sync across devices</button>`;
@@ -1022,7 +1021,7 @@ async function onSession(session) {
     }
     // Each step is guarded so a failure in ONE (catalog, migrate, inbox) can't abort the
     // handler before loadSocial runs — that was silently killing profile load on reload.
-    try { await loadCatalog(); } catch (e) { console.warn('loadCatalog failed', e); window.lastCatErr = String((e && (e.message || e)) || e); }
+    try { await loadCatalog(); } catch (e) { console.warn('loadCatalog failed', e); }
     await loadSocial();                           // profiles, my completions, shared readings, comments — MUST run
     try { await migrateChecks(); } catch (e) { console.warn('migrateChecks failed', e); }
     subscribeSocialRealtime();
@@ -1066,8 +1065,7 @@ async function boot() {
 
 // ── SOCIAL (profiles, completions, shared readings, comments) ─────────────────
 async function loadSocial() {
-  if (!sb || !currentUser) { window.lastLoadMsg = 'bailed: sb=' + (!!sb) + ' user=' + (!!currentUser); return; }
-  window.lastLoadMsg = 'started';
+  if (!sb || !currentUser) return;
   try {
     await sb.auth.getSession();   // ensure the restored session/token is ready before reads (works-after-login-but-fails-on-reload)
     // allSettled, not all: a failure in ONE table (e.g. comments) must NOT stop profiles from loading.
@@ -1080,10 +1078,6 @@ async function loadSocial() {
     const unwrap = r => r.status === 'fulfilled' ? r.value : { data: null, error: { message: String((r.reason && (r.reason.message || r.reason)) || 'rejected') } };
     const pf = unwrap(settled[0]), cm = unwrap(settled[1]), sr = unwrap(settled[2]), co = unwrap(settled[3]);
     const me = currentUser.id;
-    window.lastLoadMsg = 'profs:' + (pf.data ? pf.data.length : 'null')
-      + (pf.error ? (' pERR ' + (pf.error.code || '') + ' ' + (pf.error.message || '')) : '')
-      + ' mine:' + ((pf.data || []).some(p => p.user_id === me) ? 'in' : 'absent')
-      + ' [c' + (cm.error ? '!' : '+') + ' s' + (sr.error ? '!' : '+') + ' k' + (co.error ? '!' : '+') + ']';
     profiles = {}; (pf.data || []).forEach(p => profiles[p.user_id] = p);
     const hidden = new Set(Object.keys(profiles).filter(u => profiles[u].hidden));   // dummy/test accounts — hidden from everyone
     // per-member privacy opt-outs (default = share; only an explicit false hides)
@@ -1115,11 +1109,7 @@ async function loadSocial() {
     buildReadingIndex();
     allActivity = acts.filter(a => a.at);
     activityItems = [...allActivity].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 60);
-  } catch (e) {
-    console.warn('social load failed', e);
-    window.lastLoadMsg = 'THREW ' + ((e && (e.message || e.code)) || String(e));
-    renderAcct();
-  }
+  } catch (e) { console.warn('social load failed', e); }
 
   // Reader layer (separate + resilient: works even before reader-schema.sql is applied).
   try {
@@ -1264,14 +1254,11 @@ async function saveProfile() {
     .single();
   if (error || !saved) {
     console.warn('profile save failed', error);
-    window.lastSaveMsg = error ? ('ERR ' + (error.code || '') + ' ' + (error.message || JSON.stringify(error))) : 'no row returned';
-    renderAcct();
     alert('Couldn’t save your profile — it didn’t persist.\n\n'
-      + window.lastSaveMsg
-      + '\n\nPlease screenshot this and send it over.');
+      + (error ? ((error.code || '') + ' ' + (error.message || JSON.stringify(error))) : 'no row returned')
+      + '\n\nPlease try again, or send this over if it keeps happening.');
     return;                               // keep the picker open; don't pretend it saved
   }
-  window.lastSaveMsg = 'ok→uid:' + String(saved.user_id || '').slice(0, 8);
   myProfile = { ...(myProfile || {}), ...saved };
   profiles[currentUser.id] = myProfile;
   // privacy toggles saved separately so a pre-migration DB (missing columns) still saves name/avatar
