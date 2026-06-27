@@ -77,6 +77,9 @@
   .nav-item .ico { width: 18px; text-align: center; }
   .search-box { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 11px; margin-bottom: 14px; }
   .search-box input { border: none; background: transparent; outline: none; font-size: .86rem; color: var(--text); width: 100%; font-family: inherit; }
+  .hdr-search-btn { display: none; }                       /* header search icon: mobile-only (shown in @media) */
+  .stats-inline { display: none; }                         /* compact one-line stats: mobile-only */
+  body[data-view="other"] .search-box { display: none; }   /* search is a Readings tool — hide it elsewhere */
   .sidebar-title { font-size: .64rem; font-weight: 700; color: var(--faint); letter-spacing: .1em; text-transform: uppercase; padding: 16px 12px 6px; }
   .subject-tab { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--r-sm); cursor: pointer; font-size: .87rem; font-weight: 500; color: var(--muted); transition: background .12s, color .12s; }
   .subject-tab:hover { background: var(--surface-2); color: var(--text); }
@@ -195,17 +198,26 @@
 
   /* Mobile */
   @media (max-width: 820px) {
-    header { flex-wrap: wrap; padding: 12px 16px; padding-top: calc(16px + env(safe-area-inset-top)); }
-    header h1 { font-size: 1.02rem; }
-    .hdr-meta { width: 100%; align-items: stretch; }
-    #acctArea { justify-content: flex-start; }
-    .overall { justify-content: flex-start; }
-    .overall .bar { flex: 1; width: auto; max-width: 220px; }
+    /* slim top bar: row 1 = brand + search icon; row 2 = account; row 3 = thin "Overall" strip (Readings only) */
+    header { flex-wrap: wrap; padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); row-gap: 8px; column-gap: 10px; align-items: center; }
+    header h1 { font-size: 1rem; white-space: nowrap; }
+    header .subtitle { display: none; }
+    .hdr-brand { flex: 1 1 auto; min-width: 0; }
+    .hdr-search-btn { display: inline-flex; width: 30px; height: 30px; font-size: .9rem; flex-shrink: 0; }
+    body[data-view="other"] .hdr-search-btn { display: none; }   /* search icon: Readings only */
+    .hdr-meta { flex-basis: 100%; width: 100%; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+    #acctArea { justify-content: flex-start; font-size: .72rem; flex: 1 1 auto; }
+    #syncStatus { display: none; }                     /* sync state already shown via the account dot */
+    .overall { flex-basis: 100%; justify-content: flex-start; gap: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.13); }
+    .overall .bar { flex: 1; width: auto; }
+    .global-pct { font-size: .95rem; }
+    body[data-view="other"] .overall { display: none; }   /* "Overall" reading progress only on the Readings tab */
     .layout { flex-direction: column; }
     .sidebar { width: 100%; min-width: 0; position: static; padding: 12px 14px 4px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
-    .search-box { grid-column: 1 / -1; margin-bottom: 4px; }
+    .search-box { grid-column: 1 / -1; margin: 0 0 8px; display: none; }       /* hidden until the header search icon reveals it */
+    body.search-open .search-box { display: flex; }
     .nav-item { justify-content: center; border: 1px solid var(--border); }
-    .sidebar-title { grid-column: 1 / -1; padding: 8px 4px 2px; }
+    .sidebar-title { display: none; }                  /* the "Subjects" label is redundant above the chips on mobile */
     /* one compact horizontally-scrolling row of subject chips — stays one row no matter
        how many subjects (and however long their names), instead of stacking full-width. */
     #subjectTabs { grid-column: 1 / -1; display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
@@ -215,12 +227,14 @@
     #adminTools, .add-subject { grid-column: 1 / -1; }
     #adminTools { display: flex; flex-direction: column; }
     .add-subject { margin: 0; }
-    .main { padding: 14px 14px calc(40px + env(safe-area-inset-bottom)); }
-    .stats-row { grid-template-columns: repeat(3, 1fr); }
-    .stat-card { padding: 13px 12px; }
-    .stat-card .val { font-size: 1.3rem; }
-    .subject-name { font-size: 1.2rem; }
-    .subject-icon { width: 38px; height: 38px; }
+    .main { padding: 12px 14px calc(40px + env(safe-area-inset-bottom)); }
+    /* compact subject header: one-line title (no course-code prefix), stats fold to a single line */
+    .subject-header { gap: 11px; margin-bottom: 6px; }
+    .subject-name { font-size: 1.18rem; line-height: 1.2; }
+    .sn-code, .subject-code { display: none; }        /* "PP221:" prefix + "Public Policy" code are redundant with the chip */
+    .subject-icon { width: 36px; height: 36px; }
+    .stats-row { display: none; }
+    .stats-inline { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 16px; }
     .lu-header { gap: 10px; padding: 13px 14px; }
     .lu-title { font-size: .9rem; }
     .lu-mini-bar { display: none; }                  /* free up title width on narrow screens */
@@ -488,6 +502,7 @@
     <h1><img src="icons/favicon-32.png?v=6" class="brand-mark" alt="">PGP Reading Tracker</h1>
     <div class="subtitle">Post Graduate Programme in Public Policy</div>
   </div>
+  <button class="icon-btn hdr-search-btn" onclick="toggleMobileSearch()" aria-label="Search readings">🔎</button>
   <div class="hdr-meta">
     <div id="acctArea"></div>
     <div class="overall" title="Overall mandatory readings done">
@@ -825,6 +840,13 @@ function onSearch() {
   searchQuery = (document.getElementById('searchInput').value || '').trim();
   ['readings', 'activity', 'people', 'highlights'].forEach(n => { const el = document.getElementById('nav-' + n); if (el) el.classList.toggle('active', !searchQuery && n === currentView); });
   renderMain();
+}
+// Mobile: search lives behind an icon in the header; tap to reveal/focus, tap again (or clear) to hide.
+function toggleMobileSearch() {
+  const open = document.body.classList.toggle('search-open');
+  const si = document.getElementById('searchInput');
+  if (open && si) { si.focus(); }
+  else if (si && si.value) { si.value = ''; onSearch(); }
 }
 
 // ── SUPABASE + AUTH + SYNC ────────────────────────────────────────────────────
@@ -1426,6 +1448,9 @@ function applyViewChrome() {
   // sync the bottom tab bar's active item
   const navView = currentView === 'person' ? 'people' : (searchQuery ? 'readings' : currentView);
   ['readings', 'activity', 'people', 'highlights'].forEach(n => { const b = document.querySelector('.bottom-nav [data-bnav="' + n + '"]'); if (b) b.classList.toggle('on', n === navView); });
+  // drive view-aware chrome (search + overall strip show only on Readings) via a body attribute
+  document.body.dataset.view = onReadings ? 'readings' : 'other';
+  if (!onReadings) document.body.classList.remove('search-open');
 }
 function renderMain() {
   applyViewChrome();
@@ -1447,14 +1472,15 @@ function renderMain() {
     <div class="subject-header">
       <div class="subject-icon" style="background:${color}">${subjGlyph(sub)}</div>
       <div style="flex:1;min-width:0">
-        <div class="subject-name">${esc(sub.name)}</div>
+        <div class="subject-name">${(m => m ? `<span class="sn-code">${esc(m[1])}</span>${esc(m[2])}` : esc(sub.name))(sub.name.match(/^([A-Za-z]{2,}\d+:\s*)(.+)$/))}</div>
         <div class="subject-code">${esc(sub.code || '')}</div>
       </div>
       ${progressRing(pct, color)}
     </div>
     ${(stats.mandTotal === 0 && stats.recTotal === 0)
       ? `<div class="zero-banner"><b>${stats.mandTotal + stats.recTotal} readings</b> across ${sub.lus.length} learning unit${sub.lus.length === 1 ? '' : 's'} — start anywhere below.</div>`
-      : `<div class="stats-row">
+      : `<div class="stats-inline">${stats.mandTotal + stats.recTotal} readings · ${stats.mandDone}/${stats.mandTotal} mandatory · ${stats.recDone}/${stats.recTotal} recommended</div>
+      <div class="stats-row">
       <div class="stat-card total"><div class="val">${stats.mandTotal + stats.recTotal}</div><div class="lbl">Readings</div></div>
       <div class="stat-card mand"><div class="val">${stats.mandDone}/${stats.mandTotal}</div><div class="lbl">Mandatory</div></div>
       <div class="stat-card rec"><div class="val">${stats.recDone}/${stats.recTotal}</div><div class="lbl">Recommended</div></div>
