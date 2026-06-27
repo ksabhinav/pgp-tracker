@@ -22,7 +22,7 @@ update public.catalog set data = jsonb_set(
                   'id','lu05r06',
                   'name','In Service of the Republic: The Art and Science of Economic Policy',
                   'desc','Book by Vijay Kelkar and Ajay Shah',
-                  'url',''
+                  'url','https://www.amazon.in/Service-Republic-Science-Economic-Policy-ebook/dp/B081HXR95C'
                 ),
                 jsonb_build_object(
                   'id','lu05r07',
