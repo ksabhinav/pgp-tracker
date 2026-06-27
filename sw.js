@@ -1,5 +1,5 @@
 // PGP10 Reading Tracker — service worker (offline shell + installable PWA)
-const CACHE = 'pgp10-v40';
+const CACHE = 'pgp10-v41';
 const ASSETS = [
   './',
   './index.html',
@@ -44,18 +44,16 @@ self.addEventListener('fetch', e => {
   if (networkFirst) {
     e.respondWith(
       fetch(req).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(req, copy));
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }  // never cache 404s/errors
         return res;
       }).catch(() => caches.match(req).then(hit => hit || caches.match('./index.html')))
     );
     return;
   }
-  // Cache-first for immutable static assets (icons, vendored lib).
+  // Cache-first for immutable static assets (icons, avatars, vendored lib).
   e.respondWith(
     caches.match(req).then(hit => hit || fetch(req).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(req, copy));
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }      // never cache 404s/errors
       return res;
     }).catch(() => caches.match('./index.html')))
   );
