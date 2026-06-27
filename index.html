@@ -342,6 +342,15 @@
   .attach-btn:hover { background: var(--brand-soft); border-color: var(--brand-soft); }
   .pdf-chip { display: inline-flex; align-items: center; gap: 4px; margin-top: 5px; font-size: .74rem; font-weight: 600; color: var(--brand-ink); background: var(--brand-soft); padding: 3px 9px; border-radius: 99px; text-decoration: none; }
   .pdf-chip:hover { text-decoration: underline; }
+  /* clickable links inside comments + their OG preview card */
+  .cmt-link { color: var(--brand-ink); text-decoration: underline; word-break: break-word; }
+  .link-card { display: flex; align-items: stretch; gap: 0; margin-top: 7px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface); text-decoration: none; max-width: 420px; transition: border-color .15s, background .15s; }
+  .link-card:hover { border-color: var(--brand); background: var(--surface-2); }
+  .link-card .lc-img { flex: 0 0 84px; background-size: cover; background-position: center; background-repeat: no-repeat; background-color: var(--surface-2); }
+  .link-card .lc-body { flex: 1; min-width: 0; padding: 8px 11px; display: flex; flex-direction: column; gap: 2px; }
+  .link-card .lc-title { font-size: .8rem; font-weight: 650; color: var(--text); line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .link-card .lc-desc { font-size: .72rem; color: var(--muted); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .link-card .lc-site { font-size: .66rem; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-top: 1px; }
   .pdf-make { cursor: pointer; }
 
   /* activity day separators */
@@ -1165,6 +1174,11 @@ async function loadSocial() {
     }
     cacheReaderOffline();                          // keep a local copy so the reader works offline
   } catch (e) { hydrateReaderCache(); /* offline or schema not applied — fall back to the cached copy */ }
+  // Link/OG previews — separate + optional (works fine before the link_previews table exists).
+  try {
+    const { data } = await sb.from('link_previews').select('*');
+    linkPreviews = {}; (data || []).forEach(p => { linkPreviews[p.url] = p; });
+  } catch (e) { /* table not created yet — comments still show clickable links, just no cards */ }
 }
 
 // ---- offline cache of captured content + highlights ----
@@ -1791,7 +1805,7 @@ function renderThread(rId, cmts) {
     ${avatarHTML(c.user_id, 24)}
     <div style="flex:1;min-width:0">
       <div style="font-size:.72rem;color:var(--faint)"><b style="color:var(--text)">${esc(nameOf(c.user_id))}</b>${testTag(c.user_id)} · ${timeAgo(c.created_at)}${c.user_id === mine ? ` · <a onclick="deleteComment('${c.id}','${rId}')" style="color:var(--brand-ink);cursor:pointer">delete</a>` : ''}</div>
-      ${c.body ? `<div style="font-size:.84rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;color:var(--text)">${esc(c.body)}</div>` : ''}
+      ${c.body ? `<div style="font-size:.84rem;line-height:1.45;white-space:pre-wrap;word-break:break-word;color:var(--text)">${linkify(c.body)}</div>${linkPreviewHTML(c.body)}` : ''}
       ${c.attachment ? `<a href="${esc(c.attachment)}" target="_blank" rel="noopener" class="pdf-chip">${clipIcon(13)} PDF</a>` : ''}
     </div>
   </div>`).join('') || '<div style="font-size:.78rem;color:var(--faint);padding:4px 0">No comments yet — start the discussion.</div>';
@@ -2011,6 +2025,57 @@ document.getElementById('luTitleInput').addEventListener('keydown', e => { if (e
 
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// Escape text AND turn bare http(s) URLs into clickable links (trailing punctuation left outside the link).
+function linkify(s) {
+  const str = String(s || ''); const re = /\bhttps?:\/\/[^\s<]+/gi;
+  let out = '', last = 0, m;
+  while ((m = re.exec(str))) {
+    let url = m[0]; const trail = (url.match(/[.,;:!?)\]}'"»]+$/) || [''])[0];
+    if (trail) url = url.slice(0, -trail.length);
+    out += esc(str.slice(last, m.index))
+      + `<a href="${esc(url)}" target="_blank" rel="noopener nofollow" class="cmt-link">${esc(url)}</a>`;
+    last = m.index + url.length;
+  }
+  return out + esc(str.slice(last));
+}
+// All distinct URLs in a string (for link previews).
+function urlsIn(s) { return [...String(s || '').matchAll(/\bhttps?:\/\/[^\s<]+/gi)].map(m => m[0].replace(/[.,;:!?)\]}'"»]+$/, '')); }
+// ── Link (OG) previews ────────────────────────────────────────────────────────
+let linkPreviews = {};        // normUrl -> { url, title, description, image, site }
+let previewInflight = {};
+// Render OG cards for the URLs in a comment body (only for URLs we already have metadata for;
+// missing ones are fetched in the background, then the surface re-renders). Empty string if none yet.
+function linkPreviewHTML(text) {
+  const urls = [...new Set(urlsIn(text))].slice(0, 3);
+  let html = '';
+  for (const u of urls) {
+    const p = linkPreviews[normUrl(u)];
+    if (p && (p.title || p.image)) {
+      let site = p.site; try { site = site || new URL(u).hostname.replace(/^www\./, ''); } catch (e) {}
+      html += `<a href="${esc(u)}" target="_blank" rel="noopener nofollow" class="link-card">`
+        + (p.image ? `<span class="lc-img" style="background-image:url(&quot;${esc(p.image)}&quot;)"></span>` : '')
+        + `<span class="lc-body"><span class="lc-title">${esc(p.title || u)}</span>`
+        + (p.description ? `<span class="lc-desc">${esc(p.description)}</span>` : '')
+        + `<span class="lc-site">${esc(site || '')}</span></span></a>`;
+    } else { ensurePreview(u); }
+  }
+  return html;
+}
+async function ensurePreview(url) {
+  if (!sb || !currentUser) return;
+  const key = normUrl(url);
+  if (linkPreviews[key] || previewInflight[key]) return;
+  previewInflight[key] = true;
+  try {
+    const { data, error } = await sb.functions.invoke('unfurl', { body: { url, key } });
+    if (!error && data && (data.title || data.image)) {
+      linkPreviews[key] = data;
+      if (currentView === 'readings' || currentView === 'activity') renderMain();
+      if (typeof refreshOpenThread === 'function') refreshOpenThread();
+      if (curCmtIds && typeof renderCommentPopover === 'function') renderCommentPopover();
+    }
+  } catch (e) { /* edge fn not deployed / fetch blocked — the link stays clickable, just no card */ }
 }
 
 // ══ READER + HIGHLIGHTS (Phase 1) ════════════════════════════════════════════
@@ -2550,7 +2615,7 @@ function hlDiscussion(h, myId) {
       ${avatarHTML(c.user_id, 20)}
       <div style="flex:1;min-width:0">
         <div style="font-size:.7rem;color:var(--faint)"><b style="color:var(--text)">${esc(nameOf(c.user_id))}</b>${testTag(c.user_id)} · ${timeAgo(c.created_at)}${c.user_id === myId ? ` · <a onclick="deleteHlComment('${c.id}','${h.id}')" style="color:var(--brand-ink);cursor:pointer">delete</a>` : ''}</div>
-        <div style="font-size:.82rem;line-height:1.4;color:var(--text);white-space:pre-wrap;word-break:break-word">${esc(c.body || '')}</div>
+        <div style="font-size:.82rem;line-height:1.4;color:var(--text);white-space:pre-wrap;word-break:break-word">${linkify(c.body || '')}</div>${linkPreviewHTML(c.body || '')}
       </div></div>`).join('');
   const box = currentUser
     ? `<div style="display:flex;gap:6px;margin-top:6px">
