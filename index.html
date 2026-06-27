@@ -1239,16 +1239,26 @@ async function saveProfile() {
     share_highlights: document.getElementById('pfShareHL').checked,
     share_comments: document.getElementById('pfShareCmt').checked
   };
-  try {
-    await sb.from('profiles').upsert({ user_id: currentUser.id, name, emoji: selAvatar, color, hidden, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-    myProfile = { ...(myProfile || {}), user_id: currentUser.id, name, emoji: selAvatar, color, hidden };
-    profiles[currentUser.id] = myProfile;
-  } catch (e) { console.warn('profile save failed', e); }
+  // supabase-js returns { error } instead of throwing — must inspect it, or a failed
+  // write looks like a success and the avatar silently vanishes on the next reload.
+  const { data: saved, error } = await sb
+    .from('profiles')
+    .upsert({ user_id: currentUser.id, name, emoji: selAvatar, color, hidden, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+    .select()
+    .single();
+  if (error || !saved) {
+    console.warn('profile save failed', error);
+    alert('Couldn’t save your profile — it didn’t persist.\n\n'
+      + (error ? (error.message || error.code || JSON.stringify(error)) : 'no row returned')
+      + '\n\nPlease screenshot this and send it over.');
+    return;                               // keep the picker open; don't pretend it saved
+  }
+  myProfile = { ...(myProfile || {}), ...saved };
+  profiles[currentUser.id] = myProfile;
   // privacy toggles saved separately so a pre-migration DB (missing columns) still saves name/avatar
-  try {
-    await sb.from('profiles').update(priv).eq('user_id', currentUser.id);
-    Object.assign(myProfile, priv);
-  } catch (e) { console.warn('privacy save failed (run reader-schema.sql for the new columns)', e); }
+  const { error: pErr } = await sb.from('profiles').update(priv).eq('user_id', currentUser.id);
+  if (pErr) console.warn('privacy save failed (run reader-schema.sql for the new columns)', pErr);
+  else Object.assign(myProfile, priv);
   closeModal('profileModal');
   await loadSocial();                     // re-apply privacy across all views immediately
   renderAll(); renderAcct();
