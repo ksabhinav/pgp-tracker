@@ -169,7 +169,7 @@
   .panel-title { font-size: 1.35rem; font-weight: 750; letter-spacing: -.02em; margin-bottom: 4px; }
   .panel-sub { font-size: .82rem; color: var(--muted); margin-bottom: 20px; }
   .feed-item { display: flex; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--hair); }
-  .feed-item .feed-body { font-size: .86rem; line-height: 1.45; }
+  .feed-item .feed-body { font-size: .86rem; line-height: 1.45; overflow-wrap: break-word; word-break: break-word; min-width: 0; }
   .feed-item .feed-time { font-size: .72rem; color: var(--faint); margin-top: 2px; }
   .person-card { display: flex; align-items: center; gap: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 16px; box-shadow: var(--shadow-sm); }
   .people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px,1fr)); gap: 12px; }
@@ -1529,7 +1529,7 @@ function renderActivity(panel) {
       ? `${who} completed ${where}`
       : a.kind === 'highlight'
         ? `${who} highlighted in ${where}<div style="color:var(--muted);margin-top:3px">“${esc((a.quote || '').slice(0, 160))}”</div>`
-        : `${who} commented on ${where}<div style="color:var(--muted);margin-top:3px">“${esc(a.body)}”</div>`;
+        : `${who} commented on ${where}<div style="color:var(--muted);margin-top:3px">“${commentPreview(a.body)}”</div>`;
     parts.push(`<div class="feed-item"><span onclick="goToPerson('${a.user_id}')" style="cursor:pointer;flex-shrink:0">${avatarHTML(a.user_id, 30)}</span><div style="flex:1;min-width:0"><div class="feed-body">${body}</div><div class="feed-time">${esc(ri.subject)} · ${ri.lu.replace(/:.*/, '')} · ${timeAgo(a.at)}</div></div></div>`);
   });
   panel.innerHTML = `<div class="panel-title">Recent activity</div><div class="panel-sub">Completions and discussions across the cohort.</div>${parts.length ? parts.join('') : '<div class="empty"><p>No activity yet — be the first to tick a reading or start a discussion.</p></div>'}`;
@@ -1581,7 +1581,7 @@ function renderPerson(panel) {
     const where = `<a class="meta-link" onclick="goToReading('${a.reading_id}')">${esc(ri.name)}</a>`;
     const line = a.kind === 'done' ? `completed ${where}`
       : a.kind === 'highlight' ? `highlighted in ${where}<div style="color:var(--muted);margin-top:3px">“${esc((a.quote || '').slice(0, 160))}”</div>`
-      : `commented on ${where}<div style="color:var(--muted);margin-top:3px">“${esc(a.body)}”</div>`;
+      : `commented on ${where}<div style="color:var(--muted);margin-top:3px">“${commentPreview(a.body)}”</div>`;
     parts.push(`<div class="feed-item">${avatarHTML(uid, 28)}<div style="flex:1;min-width:0"><div class="feed-body">${line}</div><div class="feed-time">${esc(ri.subject)} · ${(ri.lu || '').replace(/:.*/, '')} · ${timeAgo(a.at)}</div></div></div>`);
   });
   panel.innerHTML = `
@@ -2076,6 +2076,18 @@ async function ensurePreview(url) {
       if (curCmtIds && typeof renderCommentPopover === 'function') renderCommentPopover();
     }
   } catch (e) { /* edge fn not deployed / fetch blocked — the link stays clickable, just no card */ }
+}
+// Compact one-line preview of a comment for the activity feed: swap raw URLs for their title
+// (or a short hostname) so a long link can't dominate, then truncate.
+function commentPreview(s) {
+  let t = String(s || '').replace(/\bhttps?:\/\/[^\s<]+/gi, m => {
+    const url = m.replace(/[.,;:!?)\]}'"»]+$/, '');
+    const p = linkPreviews[normUrl(url)];
+    if (p && p.title) return p.title;
+    ensurePreview(url);                                  // fetch in the background; feed re-renders when it lands
+    try { return new URL(url).hostname.replace(/^www\./, '') + ' link'; } catch (e) { return 'link'; }
+  }).replace(/\s+/g, ' ').trim();
+  return esc(t.length > 140 ? t.slice(0, 140) + '…' : t);
 }
 
 // ══ READER + HIGHLIGHTS (Phase 1) ════════════════════════════════════════════
