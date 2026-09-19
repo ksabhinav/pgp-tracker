@@ -83,6 +83,10 @@
   .sidebar-title { font-size: .64rem; font-weight: 700; color: var(--faint); letter-spacing: .1em; text-transform: uppercase; padding: 16px 12px 6px; }
   .term-label { font-size: .58rem; font-weight: 800; color: var(--faint); letter-spacing: .12em; text-transform: uppercase; padding: 13px 12px 5px; }
   .term-label:first-child { padding-top: 2px; }
+  .term-toggle { display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .term-toggle:hover { color: var(--muted); }
+  .term-caret { font-size: .8em; transition: transform .18s var(--ease); }
+  .term-toggle.collapsed .term-caret { transform: rotate(-90deg); }
   .subject-tab { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--r-sm); cursor: pointer; font-size: .87rem; font-weight: 500; color: var(--muted); transition: background .12s, color .12s; }
   .subject-tab:hover { background: var(--surface-2); color: var(--text); }
   .subject-tab.active { background: var(--brand-soft); color: var(--brand-ink); font-weight: 600; }
@@ -824,7 +828,15 @@ function saveProgressLocal() { userData.updatedAt = Date.now(); localStorage.set
 migrateOldStorage();
 let catalog = loadLocalCatalog();
 let userData = loadLocalProgress();
-let activeSubjectId = catalog.subjects[0]?.id || null;
+let collapsedTerms = null;                              // Set of collapsed term numbers in the subjects rail
+// The subject to open by default: first one in the newest term (the current term people are reading).
+function firstSubjectId() {
+  const subs = (catalog && catalog.subjects) || [];
+  if (!subs.length) return null;
+  const maxTerm = Math.max(...subs.map(s => s.term || 1));
+  return (subs.find(s => (s.term || 1) === maxTerm) || subs[0]).id;
+}
+let activeSubjectId = firstSubjectId();
 let pendingLUSubjectId = null;
 
 // Saves route by what changed: structure → catalog (admin), progress → userData (anyone).
@@ -911,7 +923,7 @@ async function loadCatalog() {
     else if (isAdmin) { await pushCatalog(); }   // empty catalog → seed it from local/default
   } catch (e) { console.warn('catalog load failed, using local', e); }
   if (!activeSubjectId || !catalog.subjects.some(s => s.id === activeSubjectId))
-    activeSubjectId = catalog.subjects[0]?.id || null;
+    activeSubjectId = firstSubjectId();
 }
 // ---- realtime ----
 function subscribeCatalogRealtime() {
@@ -923,7 +935,7 @@ function subscribeCatalogRealtime() {
       if (isAdmin && catPushTimer) return;             // don't clobber my own in-flight edit
       if (canonCat(nd) === canonCat(catalog)) return;  // ignore echo
       catalog = nd; saveCatalogLocal();
-      if (!catalog.subjects.some(s => s.id === activeSubjectId)) activeSubjectId = catalog.subjects[0]?.id || null;
+      if (!catalog.subjects.some(s => s.id === activeSubjectId)) activeSubjectId = firstSubjectId();
       renderAll();
     }).subscribe();
 }
@@ -1452,12 +1464,23 @@ function renderSidebar() {
       <div class="mini-pct">${pct}%</div>
     </div>`;
   };
-  // group subjects by term (no term -> Term 1); only show the "Term N" labels when there's more than one term
-  const terms = [...new Set(catalog.subjects.map(s => s.term || 1))].sort((a, b) => a - b);
-  cont.innerHTML = terms.map(t =>
-    (terms.length > 1 ? `<div class="term-label">Term ${t}</div>` : '')
-    + catalog.subjects.filter(s => (s.term || 1) === t).map(tab).join('')
-  ).join('');
+  // group by term, newest first (current term leads); older terms fold into a collapsible dropdown
+  const terms = [...new Set(catalog.subjects.map(s => s.term || 1))].sort((a, b) => b - a);
+  if (collapsedTerms === null) collapsedTerms = new Set(terms.slice(1));   // everything below the newest starts collapsed
+  const activeTerm = (catalog.subjects.find(s => s.id === activeSubjectId) || {}).term || 1;
+  const multi = terms.length > 1;
+  cont.innerHTML = terms.map((t, idx) => {
+    const tabsHtml = catalog.subjects.filter(s => (s.term || 1) === t).map(tab).join('');
+    if (!multi) return tabsHtml;
+    const collapsible = idx > 0;                                            // newest term is always open
+    const collapsed = collapsible && collapsedTerms.has(t) && t !== activeTerm;
+    const header = `<div class="term-label${collapsible ? ' term-toggle' : ''}${collapsed ? ' collapsed' : ''}"${collapsible ? ` onclick="toggleTerm(${t})"` : ''}>Term ${t}${collapsible ? '<span class="term-caret">▾</span>' : ''}</div>`;
+    return header + (collapsed ? '' : tabsHtml);
+  }).join('');
+}
+function toggleTerm(t) {
+  if (collapsedTerms.has(t)) collapsedTerms.delete(t); else collapsedTerms.add(t);
+  renderSidebar();
 }
 
 // The Subjects rail belongs to the Readings view only — hide it elsewhere so
