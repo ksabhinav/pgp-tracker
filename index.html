@@ -831,10 +831,10 @@ let userData = loadLocalProgress();
 let collapsedTerms = null;                              // Set of collapsed term numbers in the subjects rail
 // The subject to open by default: first one in the newest term (the current term people are reading).
 function firstSubjectId() {
-  const subs = (catalog && catalog.subjects) || [];
-  if (!subs.length) return null;
-  const maxTerm = Math.max(...subs.map(s => s.term || 1));
-  return (subs.find(s => (s.term || 1) === maxTerm) || subs[0]).id;
+  const subs = ((catalog && catalog.subjects) || []).filter(s => s.term !== 0);   // skip the cross-term "Common" group
+  if (!subs.length) return (catalog.subjects[0] || {}).id || null;
+  const maxTerm = Math.max(...subs.map(s => s.term ?? 1));
+  return (subs.find(s => (s.term ?? 1) === maxTerm) || subs[0]).id;
 }
 let activeSubjectId = firstSubjectId();
 let pendingLUSubjectId = null;
@@ -1464,19 +1464,24 @@ function renderSidebar() {
       <div class="mini-pct">${pct}%</div>
     </div>`;
   };
-  // group by term, newest first (current term leads); older terms fold into a collapsible dropdown
-  const terms = [...new Set(catalog.subjects.map(s => s.term || 1))].sort((a, b) => b - a);
+  // group by term, newest first (current term leads); older terms fold into a collapsible dropdown.
+  // term === 0 = a cross-term "Common" group (e.g. cohort suggestions) shown outside the terms.
+  const common = catalog.subjects.filter(s => s.term === 0);
+  const termed = catalog.subjects.filter(s => (s.term ?? 1) !== 0);
+  const terms = [...new Set(termed.map(s => s.term ?? 1))].sort((a, b) => b - a);
   if (collapsedTerms === null) collapsedTerms = new Set(terms.slice(1));   // everything below the newest starts collapsed
-  const activeTerm = (catalog.subjects.find(s => s.id === activeSubjectId) || {}).term || 1;
-  const multi = terms.length > 1;
-  cont.innerHTML = terms.map((t, idx) => {
-    const tabsHtml = catalog.subjects.filter(s => (s.term || 1) === t).map(tab).join('');
-    if (!multi) return tabsHtml;
+  const activeTerm = (catalog.subjects.find(s => s.id === activeSubjectId) || {}).term ?? 1;
+  const grouped = terms.length > 1 || common.length > 0;
+  let html = terms.map((t, idx) => {
+    const tabsHtml = termed.filter(s => (s.term ?? 1) === t).map(tab).join('');
+    if (!grouped) return tabsHtml;
     const collapsible = idx > 0;                                            // newest term is always open
     const collapsed = collapsible && collapsedTerms.has(t) && t !== activeTerm;
     const header = `<div class="term-label${collapsible ? ' term-toggle' : ''}${collapsed ? ' collapsed' : ''}"${collapsible ? ` onclick="toggleTerm(${t})"` : ''}>Term ${t}${collapsible ? '<span class="term-caret">▾</span>' : ''}</div>`;
     return header + (collapsed ? '' : tabsHtml);
   }).join('');
+  if (common.length) html += `<div class="term-label">Common</div>` + common.map(tab).join('');
+  cont.innerHTML = html;
 }
 function toggleTerm(t) {
   if (collapsedTerms.has(t)) collapsedTerms.delete(t); else collapsedTerms.add(t);
