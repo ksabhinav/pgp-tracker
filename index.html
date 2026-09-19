@@ -81,6 +81,8 @@
   .stats-inline { display: none; }                         /* compact one-line stats: mobile-only */
   body[data-view="other"] .search-box { display: none; }   /* search is a Readings tool — hide it elsewhere */
   .sidebar-title { font-size: .64rem; font-weight: 700; color: var(--faint); letter-spacing: .1em; text-transform: uppercase; padding: 16px 12px 6px; }
+  .term-label { font-size: .58rem; font-weight: 800; color: var(--faint); letter-spacing: .12em; text-transform: uppercase; padding: 13px 12px 5px; }
+  .term-label:first-child { padding-top: 2px; }
   .subject-tab { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--r-sm); cursor: pointer; font-size: .87rem; font-weight: 500; color: var(--muted); transition: background .12s, color .12s; }
   .subject-tab:hover { background: var(--surface-2); color: var(--text); }
   .subject-tab.active { background: var(--brand-soft); color: var(--brand-ink); font-weight: 600; }
@@ -218,6 +220,8 @@
     body.search-open .search-box { display: flex; }
     .nav-item { justify-content: center; border: 1px solid var(--border); }
     .sidebar-title { display: none; }                  /* the "Subjects" label is redundant above the chips on mobile */
+    .term-label { flex: 0 0 auto; align-self: center; padding: 0 2px; }   /* inline marker within the horizontal chip row */
+    .term-label:not(:first-child) { border-left: 1px solid var(--border); padding-left: 10px; margin-left: 2px; }
     /* one compact horizontally-scrolling row of subject chips — stays one row no matter
        how many subjects (and however long their names), instead of stacking full-width. */
     #subjectTabs { grid-column: 1 / -1; display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
@@ -1435,10 +1439,10 @@ function renderGlobal() {
 
 function renderSidebar() {
   const cont = document.getElementById('subjectTabs');
-  cont.innerHTML = catalog.subjects.map((sub, i) => {
+  const tab = (sub) => {
     const s = getSubjectStats(sub);
     const pct = s.mandTotal ? Math.round(s.mandDone / s.mandTotal * 100) : 0;
-    const color = sub.color || getColor(i);
+    const color = sub.color || getColor(catalog.subjects.indexOf(sub));
     return `<div class="subject-tab ${sub.id === activeSubjectId ? 'active' : ''}" onclick="setActive('${sub.id}')">
       <div class="dot" style="background:${color}">${subjGlyph(sub)}</div>
       <div style="flex:1;min-width:0">
@@ -1447,7 +1451,13 @@ function renderSidebar() {
       </div>
       <div class="mini-pct">${pct}%</div>
     </div>`;
-  }).join('');
+  };
+  // group subjects by term (no term -> Term 1); only show the "Term N" labels when there's more than one term
+  const terms = [...new Set(catalog.subjects.map(s => s.term || 1))].sort((a, b) => a - b);
+  cont.innerHTML = terms.map(t =>
+    (terms.length > 1 ? `<div class="term-label">Term ${t}</div>` : '')
+    + catalog.subjects.filter(s => (s.term || 1) === t).map(tab).join('')
+  ).join('');
 }
 
 // The Subjects rail belongs to the Readings view only — hide it elsewhere so
